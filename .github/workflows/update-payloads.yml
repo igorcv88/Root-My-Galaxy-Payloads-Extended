@@ -27,7 +27,7 @@ env:
   KSU_TAG_SHA: 932014ab5b2c9b74a3d11e2ec4d17dd10fc9442e
   MODULE_NAME: android15-6.6_kernelsu-s25u-kdp-v3.3.0.ko
   KSUD_NAME: ksud-s25u-kdp-v3.3.0
-  RESTORED_EXPLOIT_SHA256: 1719e9362cd19e58521cb785fcaa40c4613ca854d0c3c9fb8320edf8e9046303
+  CZG3_ARTIFACT_DIR: artifacts/pa3q-S938BXXSBCZG3-v0266
 
 jobs:
   update:
@@ -52,9 +52,9 @@ jobs:
 
       - name: Testar política mínima do exploit
         if: contains(inputs.atualizar, 'Exploit')
-        run: make host-test
+        run: make TARGET="$TARGET" host-test
 
-      - name: Gerar exploit CZG3 restaurado
+      - name: Gerar exploit e root helper CZG3
         if: contains(inputs.atualizar, 'Exploit')
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
@@ -62,10 +62,19 @@ jobs:
           set -euo pipefail
           make clean
           make TARGET="$TARGET" ANDROID_NDK_HOME="$ANDROID_NDK_HOME" release
+          make TARGET="$TARGET" ANDROID_NDK_HOME="$ANDROID_NDK_HOME" \
+            "build/$TARGET/cve-2026-43499-root"
+
           payload="build/$TARGET/cve-2026-43499-app.release.so"
+          helper="build/$TARGET/cve-2026-43499-root"
           test -s "$payload"
+          test -s "$helper"
           test "$(stat -c %s "$payload")" -eq 104128
           grep -aFq 'pa3q-S938BXXSBCZG3-app-physical-p0-oracle' "$payload"
+          strings "$helper" | grep -F 'auto-late-load: starting ksud daemon'
+          strings "$helper" | grep -F -- '--ksu-info'
+          strings "$helper" | grep -F -- '--allow-shell'
+
           for marker in \
             RMG_BOOT_V1 RMG_RACE_LIGHT_V1 RMG_RACE_V1 RMG_SCHED_V1 RMG_SYS_V1 \
             RMG_PREP_V1 RMG_PREP_CHECKPOINT_V1 RMG_DIAG_V1 RMG_CZG3_GATE_V1; do
@@ -74,13 +83,9 @@ jobs:
               exit 1
             fi
           done
-          actual_sha="$(sha256sum "$payload" | awk '{print $1}')"
-          if [[ "$actual_sha" != "$RESTORED_EXPLOIT_SHA256" ]]; then
-            echo "Restored source did not reproduce the pinned v0265 payload." >&2
-            echo "expected=$RESTORED_EXPLOIT_SHA256" >&2
-            echo "actual=$actual_sha" >&2
-            exit 1
-          fi
+
+          echo "Exploit SHA-256: $(sha256sum "$payload" | awk '{print $1}')"
+          echo "Root helper SHA-256: $(sha256sum "$helper" | awk '{print $1}')"
 
       - name: Preparar KernelSU
         if: contains(inputs.atualizar, 'KernelSU')
@@ -185,10 +190,13 @@ jobs:
           )
           if legacy_target["exploit"]["url"] != legacy_exploit_url:
               raise SystemExit("legacy v2 exploit path drifted")
-          restored_exploit = (
-              root / "artifacts/pa3q-S938BXXSBCZG3-v0265/cve-2026-43499-app.so"
-          )
-          restored_exploit_url = prefix + restored_exploit.relative_to(root).as_posix()
+
+          artifact_dir = root / os.environ["CZG3_ARTIFACT_DIR"]
+          exploit_dest = artifact_dir / "cve-2026-43499-app.so"
+          helper_dest = artifact_dir / "cve-2026-43499-root"
+          helper_sha_file = artifact_dir / "cve-2026-43499-root.sha256"
+          exploit_url = prefix + exploit_dest.relative_to(root).as_posix()
+          helper_url = prefix + helper_dest.relative_to(root).as_posix()
           mode = os.environ["UPDATE_MODE"]
 
           def destination(url: str) -> pathlib.Path:
@@ -201,16 +209,34 @@ jobs:
               return len(data), hashlib.sha256(data).hexdigest()
 
           if "Exploit" in mode:
-              source = root / "build/pa3q-S938BXXSBCZG3/cve-2026-43499-app.release.so"
-              restored_exploit.parent.mkdir(parents=True, exist_ok=True)
-              shutil.copy2(source, restored_exploit)
-              size, digest = metadata(restored_exploit)
-              target["exploit"]["url"] = restored_exploit_url
+              artifact_dir.mkdir(parents=True, exist_ok=True)
+              exploit_source = root / "build/pa3q-S938BXXSBCZG3/cve-2026-43499-app.release.so"
+              helper_source = root / "build/pa3q-S938BXXSBCZG3/cve-2026-43499-root"
+              shutil.copy2(exploit_source, exploit_dest)
+              shutil.copy2(helper_source, helper_dest)
+
+              size, digest = metadata(exploit_dest)
+              target["exploit"]["url"] = exploit_url
               target["exploit"]["size"] = size
               target["exploit"]["sha256"] = digest
+
+              helper_size, helper_digest = metadata(helper_dest)
+              target["rootHelper"] = {
+                  "url": helper_url,
+                  "size": helper_size,
+                  "sha256": helper_digest,
+              }
+              helper_sha_file.write_text(
+                  f"{helper_digest}  cve-2026-43499-root\n",
+                  encoding="utf-8",
+              )
               print(
-                  f"Exploit v3: {restored_exploit.relative_to(root)} "
+                  f"Exploit v3: {exploit_dest.relative_to(root)} "
                   f"({size} bytes, {digest})"
+              )
+              print(
+                  f"Root helper: {helper_dest.relative_to(root)} "
+                  f"({helper_size} bytes, {helper_digest})"
               )
 
           if "KernelSU" in mode:
@@ -256,6 +282,10 @@ jobs:
         run: |
           set -euo pipefail
           python3 .github/scripts/validate_feed.py
+          if [[ "$UPDATE_MODE" == *Exploit* ]]; then
+            test -s "$CZG3_ARTIFACT_DIR/cve-2026-43499-root"
+            (cd "$CZG3_ARTIFACT_DIR" && sha256sum -c cve-2026-43499-root.sha256)
+          fi
           git diff --check
 
       - name: Publicar no repositório
@@ -265,10 +295,16 @@ jobs:
           git config user.email "root-my-galaxy@users.noreply.github.com"
 
           git add support/targets-v3.json
-          git add artifacts/pa3q-S938BXXSBCZG3-v0265/cve-2026-43499-app.so
-          git add kernelsu/android15-6.6_kernelsu-s25u-kdp-v3.3.0.ko
-          git add kernelsu/ksud-s25u-kdp-v3.3.0
-          git add kernelsu/README.md
+          if [[ "$UPDATE_MODE" == *Exploit* ]]; then
+            git add "$CZG3_ARTIFACT_DIR/cve-2026-43499-app.so"
+            git add "$CZG3_ARTIFACT_DIR/cve-2026-43499-root"
+            git add "$CZG3_ARTIFACT_DIR/cve-2026-43499-root.sha256"
+          fi
+          if [[ "$UPDATE_MODE" == *KernelSU* ]]; then
+            git add kernelsu/android15-6.6_kernelsu-s25u-kdp-v3.3.0.ko
+            git add kernelsu/ksud-s25u-kdp-v3.3.0
+            git add kernelsu/README.md
+          fi
 
           if git diff --cached --quiet; then
             echo "Nenhum arquivo mudou. Nada para publicar."
