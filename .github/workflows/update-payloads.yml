@@ -196,6 +196,7 @@ jobs:
           helper_dest = artifact_dir / "cve-2026-43499-root"
           helper_sha_file = artifact_dir / "cve-2026-43499-root.sha256"
           exploit_url = prefix + exploit_dest.relative_to(root).as_posix()
+          helper_url = prefix + helper_dest.relative_to(root).as_posix()
           mode = os.environ["UPDATE_MODE"]
 
           def destination(url: str) -> pathlib.Path:
@@ -220,6 +221,11 @@ jobs:
               target["exploit"]["sha256"] = digest
 
               helper_size, helper_digest = metadata(helper_dest)
+              target["rootHelper"] = {
+                  "url": helper_url,
+                  "size": helper_size,
+                  "sha256": helper_digest,
+              }
               helper_sha_file.write_text(
                   f"{helper_digest}  cve-2026-43499-root\n",
                   encoding="utf-8",
@@ -289,12 +295,16 @@ jobs:
           git config user.email "root-my-galaxy@users.noreply.github.com"
 
           git add support/targets-v3.json
-          git add "$CZG3_ARTIFACT_DIR/cve-2026-43499-app.so"
-          git add "$CZG3_ARTIFACT_DIR/cve-2026-43499-root"
-          git add "$CZG3_ARTIFACT_DIR/cve-2026-43499-root.sha256"
-          git add kernelsu/android15-6.6_kernelsu-s25u-kdp-v3.3.0.ko
-          git add kernelsu/ksud-s25u-kdp-v3.3.0
-          git add kernelsu/README.md
+          if [[ "$UPDATE_MODE" == *Exploit* ]]; then
+            git add "$CZG3_ARTIFACT_DIR/cve-2026-43499-app.so"
+            git add "$CZG3_ARTIFACT_DIR/cve-2026-43499-root"
+            git add "$CZG3_ARTIFACT_DIR/cve-2026-43499-root.sha256"
+          fi
+          if [[ "$UPDATE_MODE" == *KernelSU* ]]; then
+            git add kernelsu/android15-6.6_kernelsu-s25u-kdp-v3.3.0.ko
+            git add kernelsu/ksud-s25u-kdp-v3.3.0
+            git add kernelsu/README.md
+          fi
 
           if git diff --cached --quiet; then
             echo "Nenhum arquivo mudou. Nada para publicar."
