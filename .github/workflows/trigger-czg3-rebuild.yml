@@ -1,0 +1,27 @@
+name: Trigger CZG3 Rebuild
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/czg3-rebuild-trigger
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    name: Dispatch Exploit + KernelSU rebuild
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch canonical payload workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run update-payloads.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f 'atualizar=Exploit + KernelSU'
