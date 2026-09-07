@@ -3,9 +3,6 @@ TARGET ?= pa3q-S938NKSUACZF1
 OUTDIR ?= build/$(TARGET)
 
 APP_TARGET_CFLAGS :=
-ifeq ($(TARGET),pa3q-S938BXXSBCZG3)
-APP_TARGET_CFLAGS := -DAPP_TRACEFS_SLIDE=1 -DSLIDE_TRACEFS_EVENT_ID=109
-endif
 ifeq ($(TARGET),dm2q-S916BXXSAFZG1)
 APP_TARGET_CFLAGS := -DSLIDE_STACK_WRITER=1
 endif
@@ -106,9 +103,15 @@ host-test:
 	  fi; \
 	  if [ '$(TARGET)' = 'pa3q-S938BXXSBCZG3' ]; then \
 	    case '$(APP_TARGET_CFLAGS)' in \
-	      *'-DAPP_TRACEFS_SLIDE=1'*'-DSLIDE_TRACEFS_EVENT_ID=109'*) ;; \
-	      *) echo 'CZG3 tracefs KASLR route is not enabled with event ID 109' >&2; exit 1 ;; \
+	      *'-DAPP_TRACEFS_SLIDE='*|*'-DSLIDE_TRACEFS_EVENT_ID='*) \
+	        echo 'CZG3 must keep the validated physical P0 KASLR route; tracefs flags are forbidden' >&2; \
+	        exit 1 ;; \
 	    esac; \
+	    if grep -Eq '^[[:space:]]*#define[[:space:]]+(APP_TRACEFS_SLIDE|SLIDE_TRACEFS_EVENT_ID)([[:space:]]|$$)' \
+	        src/targets/pa3q-S938BXXSBCZG3/target.h; then \
+	      echo 'CZG3 target.h must not enable the tracefs KASLR route' >&2; \
+	      exit 1; \
+	    fi; \
 	  fi; \
 	  grep -Fq 'pa3q-S938BXXSBCZG3-app-physical-p0-oracle' \
 	    src/targets/pa3q-S938BXXSBCZG3/target.h
