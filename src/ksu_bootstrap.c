@@ -10,10 +10,10 @@
 #include <unistd.h>
 
 #define APP_KSU_SOURCE "/data/user/0/dev.busung.s25uroot/files/ksu-bootstrap/ksud-s25u-kdp"
-/* The app verifies the feed-declared size and SHA-256 before root.  A fixed
+/* The app verifies the feed-declared size and SHA-256 before root. A fixed
  * byte count here would make every legitimate ksud rebuild unusable before
- * the helper itself can be rebuilt.  Zero keeps copy_atomic's regular/nonempty
- * checks while treating the app's verified source as the integrity authority. */
+ * the helper itself can be rebuilt. Zero keeps the regular/nonempty checks
+ * while treating the app's verified source as the integrity authority. */
 #define KSU_EXPECTED_SIZE 0LL
 #define KSU_LOADER_PATH "/data/local/tmp/ksud-s25u-kdp"
 #define KSU_LOADER_TMP "/data/local/tmp/.ksud-loader-refresh"
@@ -60,12 +60,24 @@ static int is_umh_invocation(void) {
   return 0;
 }
 
-static int copy_atomic(const char *source, const char *temporary,
-                       const char *destination, off_t expected_size) {
+/*
+ * Promote exactly one verified ksud copy into the path expected by the PR #300
+ * helper. Do not fsync here and do not create .ksud-stage here: su_daemon.c's
+ * original PR #300 auto-late-load path already creates that stage itself.
+ *
+ * This constructor executes before umh_main(), and root.c only waits about two
+ * seconds for the helper socket. Keeping this to one buffered copy prevents
+ * post-root staging I/O from being misclassified as an exploit/root-landing
+ * failure while preserving the original PR #300 ordering inside the SELinux
+ * permissive handoff window.
+ */
+static int copy_loader_atomic(const char *source, const char *temporary,
+                              const char *destination, off_t expected_size) {
   int in = open(source, O_RDONLY | O_CLOEXEC);
   if (in < 0) {
     return -errno;
   }
+
   struct stat st;
   if (fstat(in, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0 ||
       (expected_size > 0 && st.st_size != expected_size)) {
@@ -84,7 +96,7 @@ static int copy_atomic(const char *source, const char *temporary,
     return -saved;
   }
 
-  char buffer[128 * 1024];
+  char buffer[256 * 1024];
   int result = 0;
   for (;;) {
     ssize_t got = read(in, buffer, sizeof(buffer));
@@ -98,6 +110,7 @@ static int copy_atomic(const char *source, const char *temporary,
     if (got == 0) {
       break;
     }
+
     ssize_t offset = 0;
     while (offset < got) {
       ssize_t written = write(out, buffer + offset, (size_t)(got - offset));
@@ -115,15 +128,13 @@ static int copy_atomic(const char *source, const char *temporary,
     }
   }
 
-  if (result == 0 && fsync(out) != 0) {
-    result = -errno;
-  }
   if (result == 0 && fchmod(out, 0755) != 0) {
     result = -errno;
   }
   if (result == 0) {
     (void)fchown(out, 0, 0);
   }
+
   close(out);
   close(in);
 
@@ -143,30 +154,24 @@ static void invalidate_stale_stage(void) {
   unlink(KSU_STAGE_PATH);
 }
 
-/*
- * The constructor runs only for the kernel UMH invocation. At that point the
- * exploit has already obtained UID 0 and temporarily disabled SELinux
- * enforcing, but KernelSU has not been late-loaded yet.
- *
- * Standalone Auto Root deliberately cannot touch /data/local/tmp pre-root.
- * The Android app therefore keeps the feed-verified ksud in a deterministic
- * app-private path. Promote that exact source into the two locations required
- * by the CZG3 v3.3.0 late-load handoff before su_daemon.c starts its existing
- * auto-late-load sequence.
- *
- * This is post-race work: no exploit/FOPS/KASLR timing is changed.
- */
 __attribute__((constructor)) static void prepare_kernelsu_bootstrap(void) {
   if (geteuid() != 0 || !is_umh_invocation()) {
     return;
   }
 
   unlink(KSU_STAGE_LOG);
+  /* Never let a previous .ksud-stage survive into this boot. The PR #300
+   * su_daemon path will recreate it from the freshly promoted loader. */
+  unlink(KSU_STAGE_TMP);
+  unlink(KSU_STAGE_PATH);
+
   stage_log("ksu-auto-stage: begin source=%s expected_size=%lld\n",
             APP_KSU_SOURCE, KSU_EXPECTED_SIZE);
 
-  int loader = copy_atomic(APP_KSU_SOURCE, KSU_LOADER_TMP, KSU_LOADER_PATH,
-                           (off_t)KSU_EXPECTED_SIZE);
+  int loader = copy_loader_atomic(APP_KSU_SOURCE,
+                                  KSU_LOADER_TMP,
+                                  KSU_LOADER_PATH,
+                                  (off_t)KSU_EXPECTED_SIZE);
   if (loader != 0) {
     invalidate_stale_stage();
     stage_log("ksu-auto-stage: loader copy failed rc=%d errno=%d; stale stage removed\n",
@@ -174,19 +179,10 @@ __attribute__((constructor)) static void prepare_kernelsu_bootstrap(void) {
     return;
   }
 
-  int stage = copy_atomic(KSU_LOADER_PATH, KSU_STAGE_TMP, KSU_STAGE_PATH,
-                          (off_t)KSU_EXPECTED_SIZE);
-  if (stage != 0) {
-    invalidate_stale_stage();
-    stage_log("ksu-auto-stage: .ksud-stage copy failed rc=%d errno=%d; staged loader removed\n",
-              stage, -stage);
-    return;
-  }
-
   struct stat st;
-  if (stat(KSU_LOADER_PATH, &st) == 0) {
-    stage_log("ksu-auto-stage: ready loader=%s stage=%s size=%lld\n",
-              KSU_LOADER_PATH, KSU_STAGE_PATH, (long long)st.st_size);
+  if (stat(KSU_LOADER_PATH, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0) {
+    stage_log("ksu-auto-stage: loader ready path=%s size=%lld; PR300 stage pending\n",
+              KSU_LOADER_PATH, (long long)st.st_size);
   } else {
     invalidate_stale_stage();
     stage_log("ksu-auto-stage: final loader stat failed errno=%d\n", errno);
