@@ -23,9 +23,6 @@ LEGACY_EXPLOIT_SHA256 = (
 V0265_EXPLOIT_SHA256 = (
     "1719e9362cd19e58521cb785fcaa40c4613ca854d0c3c9fb8320edf8e9046303"
 )
-V3_KERNELSU_SHA256 = (
-    "5a009f1fc58b25a6e197d8ec951a86ec11a9b5ec9d56bdb5f7a3410a22b9b48a"
-)
 EXPECTED_IDENTITY = {
     "manufacturer": "samsung",
     "model": "SM-S938B",
@@ -133,8 +130,12 @@ def main() -> None:
     assert target["exactMatch"] == EXPECTED_IDENTITY, "exact S938B identity drifted"
 
     exploit = validate_v3_artifact(target["exploit"], "exploit")
+    # KernelSU is intentionally rebuildable from the exact KSU_TAG_SHA plus the
+    # versioned Samsung/RMG patches in the canonical workflow. Validate the
+    # published artifact against its feed size/SHA instead of pinning a stale
+    # binary digest here; otherwise every legitimate patched ksud rebuild is
+    # rejected after the workflow has correctly updated the manifest.
     validate_v3_artifact(target["kernelsu"], "kernelsu")
-    assert target["kernelsu"]["sha256"] == V3_KERNELSU_SHA256
 
     if exploit == ROOT / V0265_EXPLOIT:
         assert target["exploit"]["sha256"] == V0265_EXPLOIT_SHA256
