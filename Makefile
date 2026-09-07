@@ -3,6 +3,9 @@ TARGET ?= pa3q-S938NKSUACZF1
 OUTDIR ?= build/$(TARGET)
 
 APP_TARGET_CFLAGS :=
+ifeq ($(TARGET),pa3q-S938BXXSBCZG3)
+APP_TARGET_CFLAGS := -DAPP_TRACEFS_SLIDE=1 -DSLIDE_TRACEFS_EVENT_ID=109
+endif
 ifeq ($(TARGET),dm2q-S916BXXSAFZG1)
 APP_TARGET_CFLAGS := -DSLIDE_STACK_WRITER=1
 endif
@@ -100,6 +103,10 @@ host-test:
 	    echo 'forbidden CZG3 diagnostic feature flag remains enabled' >&2; \
 	    exit 1; \
 	  fi; \
+	  case '$(APP_TARGET_CFLAGS)' in \
+	    *'-DAPP_TRACEFS_SLIDE=1'*'-DSLIDE_TRACEFS_EVENT_ID=109'*) ;; \
+	    *) echo 'CZG3 tracefs KASLR route is not enabled with event ID 109' >&2; exit 1 ;; \
+	  esac; \
 	  grep -Fq 'pa3q-S938BXXSBCZG3-app-physical-p0-oracle' \
 	    src/targets/pa3q-S938BXXSBCZG3/target.h
 
