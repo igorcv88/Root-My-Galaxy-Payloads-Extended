@@ -41,6 +41,9 @@
 
 A firmware or kernel update can invalidate the profile and its offsets.
 
+> [!CAUTION]
+> **v0266 has passed build, feed and static publication validation, but CZG3 hardware validation is still pending.** The current app test has not yet reached the v0266 exploit because it stopped earlier on an APK root-helper packaging mismatch. Until a real-device v0266 root completes successfully, do not treat this generation as the hardware-known-good CZG3 baseline. The immutable legacy v2 artifact remains the previously hardware-validated reference.
+
 ## Current v0266 artifacts
 
 The current v3 feed publishes a three-artifact set for CZG3:
