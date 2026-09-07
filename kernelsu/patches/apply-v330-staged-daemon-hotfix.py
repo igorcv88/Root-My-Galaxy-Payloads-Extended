@@ -8,24 +8,73 @@ late_text = late_load.read_text(encoding="utf-8")
 old_namespace = '''pub fn run(_package_name: &String, kmi: Option<String>, allow_shell: bool) -> Result<()> {
     info!("late-load command triggered!");
 '''
-new_namespace = '''pub fn run(_package_name: &String, kmi: Option<String>, allow_shell: bool) -> Result<()> {
-    // Serialize every late-load caller. The UMH auto path and the app fallback
-    // can overlap while the kernel control channel is already visible but the
-    // blocking mount stages are still running. Holding this lock until the end
-    // prevents duplicate module/metamodule stage replay.
+new_namespace = '''fn acquire_rmg_late_load_lock() -> Result<std::fs::File> {
+    // Never create/open a filesystem lock before KernelSU loads. Samsung
+    // DEFEX/Safeplace can reject O_CREAT from this bootstrap execution context
+    // even though the same process has uid 0. An abstract AF_UNIX address is
+    // kernel-only, process-lifetime scoped, and still serializes auto/fallback
+    // late-load callers across their separate mount namespaces.
+    const LOCK_NAME: &[u8] = b"rmg_ksu_late_load_v1";
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(45);
+
+    loop {
+        let fd = unsafe {
+            libc::socket(
+                libc::AF_UNIX,
+                libc::SOCK_DGRAM | libc::SOCK_CLOEXEC,
+                0,
+            )
+        };
+        if fd < 0 {
+            return Err(std::io::Error::last_os_error())
+                .context("Failed to create RMG abstract late-load lock socket");
+        }
+
+        let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+        address.sun_family = libc::AF_UNIX as libc::sa_family_t;
+        address.sun_path[0] = 0;
+        for (index, byte) in LOCK_NAME.iter().enumerate() {
+            address.sun_path[index + 1] = *byte as libc::c_char;
+        }
+        let address_len = (
+            std::mem::size_of::<libc::sa_family_t>() + 1 + LOCK_NAME.len()
+        ) as libc::socklen_t;
+
+        let bind_result = unsafe {
+            libc::bind(
+                fd,
+                &address as *const libc::sockaddr_un as *const libc::sockaddr,
+                address_len,
+            )
+        };
+        if bind_result == 0 {
+            let socket = unsafe {
+                <std::fs::File as std::os::fd::FromRawFd>::from_raw_fd(fd)
+            };
+            return Ok(socket);
+        }
+
+        let error = std::io::Error::last_os_error();
+        unsafe { libc::close(fd) };
+        if error.raw_os_error() != Some(libc::EADDRINUSE) {
+            return Err(error).context("Failed to bind RMG abstract late-load lock socket");
+        }
+        if std::time::Instant::now() >= deadline {
+            anyhow::bail!("Timed out waiting for another RMG late-load caller");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+pub fn run(_package_name: &String, kmi: Option<String>, allow_shell: bool) -> Result<()> {
+    // Serialize every late-load caller without touching /data before KernelSU
+    // policy is active. The socket fd stays alive until run() returns.
+    let _late_load_lock = acquire_rmg_late_load_lock()?;
     let boot_id = std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
         .context("Failed to read kernel boot id for late-load")?
         .trim()
         .to_string();
     let ready_marker_path = "/data/local/tmp/.rmg-ksu-late-load-ready";
-    let late_load_lock = std::fs::OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .open("/data/local/tmp/.rmg-ksu-late-load.lock")
-        .context("Failed to open RMG late-load lock")?;
-    rustix::fs::flock(&late_load_lock, rustix::fs::FlockOperation::LockExclusive)
-        .context("Failed to acquire RMG late-load lock")?;
 
     // A second caller can only observe this marker after the first caller has
     // completed late-load, metamodule and post-mount stages. Do not replay the
@@ -165,4 +214,4 @@ if "pub fn stage_daemon_from(" in utils_text:
 utils_text = utils_text.replace(anchor, staged_fn + anchor)
 utils.write_text(utils_text, encoding="utf-8")
 
-print("Applied staged-daemon handoff + serialized init mount namespace hotfix")
+print("Applied staged-daemon handoff + abstract-lock init mount namespace hotfix")
