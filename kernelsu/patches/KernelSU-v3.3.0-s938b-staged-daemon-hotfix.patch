@@ -1,7 +1,34 @@
 diff --git a/userspace/ksud/src/late_load.rs b/userspace/ksud/src/late_load.rs
 --- a/userspace/ksud/src/late_load.rs
 +++ b/userspace/ksud/src/late_load.rs
-@@ -42,9 +42,11 @@ pub fn run(package_name: &String, kmi: Option<String>, allow_shell: bool) -> Res
+@@ -34,14 +34,37 @@ fn dump_process_info(label: &str) {
+ }
+ 
+ pub fn run(_package_name: &String, kmi: Option<String>, allow_shell: bool) -> Result<()> {
++    // The RMG DEFEX trampoline deliberately execs ksud from a private mount
++    // namespace so the temporary /system/bin/logcat bind never becomes global.
++    // Late-load itself, however, owns systemless/module mounts and must run in
++    // init's namespace or those mounts disappear with the trampoline namespace.
++    let self_mnt_before = std::fs::read_link("/proc/self/ns/mnt")
++        .context("Failed to read late-load mount namespace")?;
++    let init_mnt = std::fs::read_link("/proc/1/ns/mnt")
++        .context("Failed to read init mount namespace")?;
++    utils::switch_mnt_ns(1).context("Failed to enter init mount namespace for late-load")?;
++    let self_mnt_after = std::fs::read_link("/proc/self/ns/mnt")
++        .context("Failed to verify late-load mount namespace")?;
++    anyhow::ensure!(
++        self_mnt_after == init_mnt,
++        "late-load mount namespace mismatch after switch: self={} init={}",
++        self_mnt_after.display(),
++        init_mnt.display()
++    );
++
++    info!(
++        "late-load mount namespace: before={} init={} after={}",
++        self_mnt_before.display(),
++        init_mnt.display(),
++        self_mnt_after.display()
++    );
      info!("late-load command triggered!");
      dump_process_info("late-load start");
  
