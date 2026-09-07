@@ -1,10 +1,40 @@
 diff --git a/userspace/ksud/src/late_load.rs b/userspace/ksud/src/late_load.rs
 --- a/userspace/ksud/src/late_load.rs
 +++ b/userspace/ksud/src/late_load.rs
-@@ -34,14 +34,37 @@ fn dump_process_info(label: &str) {
+@@ -34,14 +34,73 @@ fn dump_process_info(label: &str) {
  }
  
  pub fn run(_package_name: &String, kmi: Option<String>, allow_shell: bool) -> Result<()> {
++    // Serialize every late-load caller. The UMH auto path and the app fallback
++    // can overlap while the kernel control channel is already visible but the
++    // blocking mount stages are still running. Holding this lock until the end
++    // prevents duplicate module/metamodule stage replay.
++    let boot_id = std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
++        .context("Failed to read kernel boot id for late-load")?
++        .trim()
++        .to_string();
++    let ready_marker_path = "/data/local/tmp/.rmg-ksu-late-load-ready";
++    let late_load_lock = std::fs::OpenOptions::new()
++        .create(true)
++        .read(true)
++        .write(true)
++        .open("/data/local/tmp/.rmg-ksu-late-load.lock")
++        .context("Failed to open RMG late-load lock")?;
++    rustix::fs::flock(&late_load_lock, rustix::fs::FlockOperation::LockExclusive)
++        .context("Failed to acquire RMG late-load lock")?;
++
++    // A second caller can only observe this marker after the first caller has
++    // completed late-load, metamodule and post-mount stages. Do not replay the
++    // stages on the same kernel boot.
++    let expected_boot_line = format!("boot_id={boot_id}");
++    if std::fs::read_to_string(ready_marker_path)
++        .ok()
++        .is_some_and(|marker| marker.lines().any(|line| line.trim() == expected_boot_line))
++    {
++        info!("late-load already completed for boot_id={boot_id}; skipping duplicate caller");
++        return Ok(());
++    }
++
 +    // The RMG DEFEX trampoline deliberately execs ksud from a private mount
 +    // namespace so the temporary /system/bin/logcat bind never becomes global.
 +    // Late-load itself, however, owns systemless/module mounts and must run in
@@ -43,6 +73,30 @@ diff --git a/userspace/ksud/src/late_load.rs b/userspace/ksud/src/late_load.rs
  
      // 1. Check if KernelSU is already loaded
      if ksuinit::has_kernelsu() {
+@@ -131,6 +190,24 @@ pub fn run(_package_name: &String, kmi: Option<String>, allow_shell: bool) -> Res
+     // 13. Execute boot-completed stage scripts (non-blocking)
+     init_event::run_stage("boot-completed", false);
+ 
++    // Publish readiness only after all blocking mount stages completed in the
++    // init namespace. The boot id makes the marker safe across full reboots.
++    let ready_mnt = std::fs::read_link("/proc/self/ns/mnt")
++        .unwrap_or_else(|_| self_mnt_after.clone());
++    let ready_marker = format!(
++        "boot_id={}\nmount_ns={}\n",
++        boot_id,
++        ready_mnt.display()
++    );
++    match std::fs::write(ready_marker_path, ready_marker) {
++        Ok(()) => info!(
++            "late-load global readiness published boot_id={} mount_ns={}",
++            boot_id,
++            ready_mnt.display()
++        ),
++        Err(e) => warn!("failed to publish late-load readiness marker: {e}"),
++    }
++
+     Ok(())
+ }
 diff --git a/userspace/ksud/src/utils.rs b/userspace/ksud/src/utils.rs
 --- a/userspace/ksud/src/utils.rs
 +++ b/userspace/ksud/src/utils.rs
