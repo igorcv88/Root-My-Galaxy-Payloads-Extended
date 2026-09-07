@@ -120,8 +120,8 @@ size: 332416
 SHA-256: 7e6889f17d25e081205373e1a0a0effcc0a52d5f842cf835223b7019198e2975
 
 ksud-s25u-kdp-v3.3.0
-size: 5104064
-SHA-256: 64bf3b36591ebe0a730045ab3941469588316297d09079dda9858721add9d973
+size: 5101296
+SHA-256: 6ea5ab21e23f498b83bf33a843bf300f289e0c28b9e33d32229bdffef026663c
 ```
 
 Static validation confirmed AArch64 ELF64, exact vermagic, 215 undefined symbols
