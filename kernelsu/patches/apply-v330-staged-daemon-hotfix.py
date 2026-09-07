@@ -88,31 +88,13 @@ pub fn run(_package_name: &String, kmi: Option<String>, allow_shell: bool) -> Re
         return Ok(());
     }
 
-    // The RMG DEFEX trampoline deliberately execs ksud from a private mount
-    // namespace so the temporary /system/bin/logcat bind never becomes global.
-    // Late-load itself, however, owns systemless/module mounts and must run in
-    // init's namespace or those mounts disappear with the trampoline namespace.
-    let self_mnt_before = std::fs::read_link("/proc/self/ns/mnt")
-        .context("Failed to read late-load mount namespace")?;
-    let init_mnt = std::fs::read_link("/proc/1/ns/mnt")
-        .context("Failed to read init mount namespace")?;
-    utils::switch_mnt_ns(1).context("Failed to enter init mount namespace for late-load")?;
-    let self_mnt_after = std::fs::read_link("/proc/self/ns/mnt")
-        .context("Failed to verify late-load mount namespace")?;
-    anyhow::ensure!(
-        self_mnt_after == init_mnt,
-        "late-load mount namespace mismatch after switch: self={} init={}",
-        self_mnt_after.display(),
-        init_mnt.display()
-    );
-
-    info!(
-        "late-load mount namespace: before={} init={} after={}",
-        self_mnt_before.display(),
-        init_mnt.display(),
-        self_mnt_after.display()
-    );
+    // Keep the bootstrap in the private DEFEX trampoline namespace until the
+    // KernelSU module has been loaded. In particular, do not call setns here:
+    // this pre-KSU execution context can be killed by Samsung policy with
+    // SIGSYS. No systemless/module mounts are created before the post-load
+    // namespace switch below.
     info!("late-load command triggered!");
+    dump_process_info("late-load bootstrap");
 '''
 if late_text.count(old_namespace) != 1:
     raise SystemExit("expected Samsung v3.3.0 late-load entry anchor exactly once")
@@ -131,6 +113,44 @@ new_late = '''    // The app/helper pre-uploads a verified copy specifically for
 if late_text.count(old_late) != 1:
     raise SystemExit("expected v3.3.0 running-ksud staging block exactly once")
 late_text = late_text.replace(old_late, new_late, 1)
+
+post_load_anchor = '''    // We need to reset stdin/stdout/stderr; otherwise, sending file descriptors via cmd transactions
+    // will be blocked by SELinux because its fsec->sid is still u:r:su:s0 instead of u:r:ksu:s0.
+'''
+post_load_namespace = '''    // The RMG DEFEX trampoline deliberately execs ksud from a private mount
+    // namespace so the temporary /system/bin/logcat bind never becomes global.
+    // Only after kernelsu.ko is active do we enter init's mount namespace.
+    // Everything that can create systemless/module mounts happens below this
+    // point, so those mounts persist globally after the trampoline exits.
+    let self_mnt_before = std::fs::read_link("/proc/self/ns/mnt")
+        .context("Failed to read late-load mount namespace")?;
+    let init_mnt = std::fs::read_link("/proc/1/ns/mnt")
+        .context("Failed to read init mount namespace")?;
+    dump_process_info("late-load before init namespace switch");
+    utils::switch_mnt_ns(1).context("Failed to enter init mount namespace for late-load")?;
+    let self_mnt_after = std::fs::read_link("/proc/self/ns/mnt")
+        .context("Failed to verify late-load mount namespace")?;
+    anyhow::ensure!(
+        self_mnt_after == init_mnt,
+        "late-load mount namespace mismatch after switch: self={} init={}",
+        self_mnt_after.display(),
+        init_mnt.display()
+    );
+
+    info!(
+        "late-load mount namespace: before={} init={} after={}",
+        self_mnt_before.display(),
+        init_mnt.display(),
+        self_mnt_after.display()
+    );
+    dump_process_info("late-load after init namespace switch");
+
+    // We need to reset stdin/stdout/stderr; otherwise, sending file descriptors via cmd transactions
+    // will be blocked by SELinux because its fsec->sid is still u:r:su:s0 instead of u:r:ksu:s0.
+'''
+if late_text.count(post_load_anchor) != 1:
+    raise SystemExit("expected v3.3.0 post-load reset-stdio anchor exactly once")
+late_text = late_text.replace(post_load_anchor, post_load_namespace, 1)
 
 old_ready = '''    // 13. Execute boot-completed stage scripts (non-blocking)
     init_event::run_stage("boot-completed", false);
@@ -214,4 +234,4 @@ if "pub fn stage_daemon_from(" in utils_text:
 utils_text = utils_text.replace(anchor, staged_fn + anchor)
 utils.write_text(utils_text, encoding="utf-8")
 
-print("Applied staged-daemon handoff + abstract-lock init mount namespace hotfix")
+print("Applied staged-daemon handoff + post-load init mount namespace hotfix")
