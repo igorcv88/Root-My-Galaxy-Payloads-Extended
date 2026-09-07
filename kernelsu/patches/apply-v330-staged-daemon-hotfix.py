@@ -9,6 +9,36 @@ old_namespace = '''pub fn run(_package_name: &String, kmi: Option<String>, allow
     info!("late-load command triggered!");
 '''
 new_namespace = '''pub fn run(_package_name: &String, kmi: Option<String>, allow_shell: bool) -> Result<()> {
+    // Serialize every late-load caller. The UMH auto path and the app fallback
+    // can overlap while the kernel control channel is already visible but the
+    // blocking mount stages are still running. Holding this lock until the end
+    // prevents duplicate module/metamodule stage replay.
+    let boot_id = std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
+        .context("Failed to read kernel boot id for late-load")?
+        .trim()
+        .to_string();
+    let ready_marker_path = "/data/local/tmp/.rmg-ksu-late-load-ready";
+    let late_load_lock = std::fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open("/data/local/tmp/.rmg-ksu-late-load.lock")
+        .context("Failed to open RMG late-load lock")?;
+    rustix::fs::flock(&late_load_lock, rustix::fs::FlockOperation::LockExclusive)
+        .context("Failed to acquire RMG late-load lock")?;
+
+    // A second caller can only observe this marker after the first caller has
+    // completed late-load, metamodule and post-mount stages. Do not replay the
+    // stages on the same kernel boot.
+    let expected_boot_line = format!("boot_id={boot_id}");
+    if std::fs::read_to_string(ready_marker_path)
+        .ok()
+        .is_some_and(|marker| marker.lines().any(|line| line.trim() == expected_boot_line))
+    {
+        info!("late-load already completed for boot_id={boot_id}; skipping duplicate caller");
+        return Ok(());
+    }
+
     // The RMG DEFEX trampoline deliberately execs ksud from a private mount
     // namespace so the temporary /system/bin/logcat bind never becomes global.
     // Late-load itself, however, owns systemless/module mounts and must run in
@@ -51,7 +81,41 @@ new_late = '''    // The app/helper pre-uploads a verified copy specifically for
 '''
 if late_text.count(old_late) != 1:
     raise SystemExit("expected v3.3.0 running-ksud staging block exactly once")
-late_load.write_text(late_text.replace(old_late, new_late), encoding="utf-8")
+late_text = late_text.replace(old_late, new_late, 1)
+
+old_ready = '''    // 13. Execute boot-completed stage scripts (non-blocking)
+    init_event::run_stage("boot-completed", false);
+
+    Ok(())
+}
+'''
+new_ready = '''    // 13. Execute boot-completed stage scripts (non-blocking)
+    init_event::run_stage("boot-completed", false);
+
+    // Publish readiness only after all blocking mount stages completed in the
+    // init namespace. The boot id makes the marker safe across full reboots.
+    let ready_mnt = std::fs::read_link("/proc/self/ns/mnt")
+        .unwrap_or_else(|_| self_mnt_after.clone());
+    let ready_marker = format!(
+        "boot_id={}\\nmount_ns={}\\n",
+        boot_id,
+        ready_mnt.display()
+    );
+    match std::fs::write(ready_marker_path, ready_marker) {
+        Ok(()) => info!(
+            "late-load global readiness published boot_id={} mount_ns={}",
+            boot_id,
+            ready_mnt.display()
+        ),
+        Err(e) => warn!("failed to publish late-load readiness marker: {e}"),
+    }
+
+    Ok(())
+}
+'''
+if late_text.count(old_ready) != 1:
+    raise SystemExit("expected Samsung v3.3.0 late-load completion anchor exactly once")
+late_load.write_text(late_text.replace(old_ready, new_ready, 1), encoding="utf-8")
 
 utils_text = utils.read_text(encoding="utf-8")
 old_imports = '''use rustix::fs::{Mode, OFlags, open};
@@ -101,4 +165,4 @@ if "pub fn stage_daemon_from(" in utils_text:
 utils_text = utils_text.replace(anchor, staged_fn + anchor)
 utils.write_text(utils_text, encoding="utf-8")
 
-print("Applied staged-daemon handoff + init mount namespace hotfix")
+print("Applied staged-daemon handoff + serialized init mount namespace hotfix")
