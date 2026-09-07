@@ -1,1 +1,1 @@
-2026-09-07 abstract-unix late-load lock regression fix
+2026-09-07 abstract-unix lock publish retry after main sync
