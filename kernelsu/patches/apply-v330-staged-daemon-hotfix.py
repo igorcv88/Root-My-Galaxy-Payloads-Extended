@@ -5,6 +5,40 @@ late_load = Path("userspace/ksud/src/late_load.rs")
 utils = Path("userspace/ksud/src/utils.rs")
 
 late_text = late_load.read_text(encoding="utf-8")
+old_namespace = '''pub fn run(package_name: &String, kmi: Option<String>, allow_shell: bool) -> Result<()> {
+    utils::daemonize(false)?;
+'''
+new_namespace = '''pub fn run(package_name: &String, kmi: Option<String>, allow_shell: bool) -> Result<()> {
+    // The RMG DEFEX trampoline deliberately execs ksud from a private mount
+    // namespace so the temporary /system/bin/logcat bind never becomes global.
+    // Late-load itself, however, owns systemless/module mounts and must run in
+    // init's namespace or those mounts disappear with the trampoline namespace.
+    let self_mnt_before = std::fs::read_link("/proc/self/ns/mnt")
+        .context("Failed to read late-load mount namespace")?;
+    let init_mnt = std::fs::read_link("/proc/1/ns/mnt")
+        .context("Failed to read init mount namespace")?;
+    utils::switch_mnt_ns(1).context("Failed to enter init mount namespace for late-load")?;
+    let self_mnt_after = std::fs::read_link("/proc/self/ns/mnt")
+        .context("Failed to verify late-load mount namespace")?;
+    anyhow::ensure!(
+        self_mnt_after == init_mnt,
+        "late-load mount namespace mismatch after switch: self={} init={}",
+        self_mnt_after.display(),
+        init_mnt.display()
+    );
+
+    utils::daemonize(false)?;
+    info!(
+        "late-load mount namespace: before={} init={} after={}",
+        self_mnt_before.display(),
+        init_mnt.display(),
+        self_mnt_after.display()
+    );
+'''
+if late_text.count(old_namespace) != 1:
+    raise SystemExit("expected v3.3.0 late-load daemonize anchor exactly once")
+late_text = late_text.replace(old_namespace, new_namespace, 1)
+
 old_late = '''    // Copy the daemon before loading the module changes this process's
     // security context. The remaining install steps require KernelSU policy.
     utils::stage_daemon().context("Failed to stage the running ksud")?;
@@ -67,4 +101,4 @@ if "pub fn stage_daemon_from(" in utils_text:
 utils_text = utils_text.replace(anchor, staged_fn + anchor)
 utils.write_text(utils_text, encoding="utf-8")
 
-print("Applied staged-daemon handoff hotfix")
+print("Applied staged-daemon handoff + init mount namespace hotfix")
