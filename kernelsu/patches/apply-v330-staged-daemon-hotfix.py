@@ -5,10 +5,10 @@ late_load = Path("userspace/ksud/src/late_load.rs")
 utils = Path("userspace/ksud/src/utils.rs")
 
 late_text = late_load.read_text(encoding="utf-8")
-old_namespace = '''pub fn run(package_name: &String, kmi: Option<String>, allow_shell: bool) -> Result<()> {
-    utils::daemonize(false)?;
+old_namespace = '''pub fn run(_package_name: &String, kmi: Option<String>, allow_shell: bool) -> Result<()> {
+    info!("late-load command triggered!");
 '''
-new_namespace = '''pub fn run(package_name: &String, kmi: Option<String>, allow_shell: bool) -> Result<()> {
+new_namespace = '''pub fn run(_package_name: &String, kmi: Option<String>, allow_shell: bool) -> Result<()> {
     // The RMG DEFEX trampoline deliberately execs ksud from a private mount
     // namespace so the temporary /system/bin/logcat bind never becomes global.
     // Late-load itself, however, owns systemless/module mounts and must run in
@@ -27,16 +27,16 @@ new_namespace = '''pub fn run(package_name: &String, kmi: Option<String>, allow_
         init_mnt.display()
     );
 
-    utils::daemonize(false)?;
     info!(
         "late-load mount namespace: before={} init={} after={}",
         self_mnt_before.display(),
         init_mnt.display(),
         self_mnt_after.display()
     );
+    info!("late-load command triggered!");
 '''
 if late_text.count(old_namespace) != 1:
-    raise SystemExit("expected v3.3.0 late-load daemonize anchor exactly once")
+    raise SystemExit("expected Samsung v3.3.0 late-load entry anchor exactly once")
 late_text = late_text.replace(old_namespace, new_namespace, 1)
 
 old_late = '''    // Copy the daemon before loading the module changes this process's
