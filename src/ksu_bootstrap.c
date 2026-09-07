@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #define APP_KSU_SOURCE "/data/user/0/dev.busung.s25uroot/files/ksu-bootstrap/ksud-s25u-kdp"
+#define KSU_EXPECTED_SIZE 5096104LL
 #define KSU_LOADER_PATH "/data/local/tmp/ksud-s25u-kdp"
 #define KSU_LOADER_TMP "/data/local/tmp/.ksud-loader-refresh"
 #define KSU_STAGE_PATH "/data/local/tmp/.ksud-stage"
@@ -56,13 +57,14 @@ static int is_umh_invocation(void) {
 }
 
 static int copy_atomic(const char *source, const char *temporary,
-                       const char *destination) {
+                       const char *destination, off_t expected_size) {
   int in = open(source, O_RDONLY | O_CLOEXEC);
   if (in < 0) {
     return -errno;
   }
   struct stat st;
-  if (fstat(in, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0) {
+  if (fstat(in, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0 ||
+      (expected_size > 0 && st.st_size != expected_size)) {
     int saved = errno ? errno : EINVAL;
     close(in);
     return -saved;
@@ -130,6 +132,13 @@ static int copy_atomic(const char *source, const char *temporary,
   return result;
 }
 
+static void invalidate_stale_stage(void) {
+  unlink(KSU_LOADER_TMP);
+  unlink(KSU_STAGE_TMP);
+  unlink(KSU_LOADER_PATH);
+  unlink(KSU_STAGE_PATH);
+}
+
 /*
  * The constructor runs only for the kernel UMH invocation. At that point the
  * exploit has already obtained UID 0 and temporarily disabled SELinux
@@ -149,18 +158,23 @@ __attribute__((constructor)) static void prepare_kernelsu_bootstrap(void) {
   }
 
   unlink(KSU_STAGE_LOG);
-  stage_log("ksu-auto-stage: begin source=%s\n", APP_KSU_SOURCE);
+  stage_log("ksu-auto-stage: begin source=%s expected_size=%lld\n",
+            APP_KSU_SOURCE, KSU_EXPECTED_SIZE);
 
-  int loader = copy_atomic(APP_KSU_SOURCE, KSU_LOADER_TMP, KSU_LOADER_PATH);
+  int loader = copy_atomic(APP_KSU_SOURCE, KSU_LOADER_TMP, KSU_LOADER_PATH,
+                           (off_t)KSU_EXPECTED_SIZE);
   if (loader != 0) {
-    stage_log("ksu-auto-stage: loader copy failed rc=%d errno=%d\n",
+    invalidate_stale_stage();
+    stage_log("ksu-auto-stage: loader copy failed rc=%d errno=%d; stale stage removed\n",
               loader, -loader);
     return;
   }
 
-  int stage = copy_atomic(KSU_LOADER_PATH, KSU_STAGE_TMP, KSU_STAGE_PATH);
+  int stage = copy_atomic(KSU_LOADER_PATH, KSU_STAGE_TMP, KSU_STAGE_PATH,
+                          (off_t)KSU_EXPECTED_SIZE);
   if (stage != 0) {
-    stage_log("ksu-auto-stage: .ksud-stage copy failed rc=%d errno=%d\n",
+    invalidate_stale_stage();
+    stage_log("ksu-auto-stage: .ksud-stage copy failed rc=%d errno=%d; staged loader removed\n",
               stage, -stage);
     return;
   }
@@ -170,7 +184,7 @@ __attribute__((constructor)) static void prepare_kernelsu_bootstrap(void) {
     stage_log("ksu-auto-stage: ready loader=%s stage=%s size=%lld\n",
               KSU_LOADER_PATH, KSU_STAGE_PATH, (long long)st.st_size);
   } else {
-    stage_log("ksu-auto-stage: ready loader=%s stage=%s\n",
-              KSU_LOADER_PATH, KSU_STAGE_PATH);
+    invalidate_stale_stage();
+    stage_log("ksu-auto-stage: final loader stat failed errno=%d\n", errno);
   }
 }
