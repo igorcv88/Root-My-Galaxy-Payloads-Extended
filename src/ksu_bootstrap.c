@@ -10,7 +10,11 @@
 #include <unistd.h>
 
 #define APP_KSU_SOURCE "/data/user/0/dev.busung.s25uroot/files/ksu-bootstrap/ksud-s25u-kdp"
-#define KSU_EXPECTED_SIZE 5096104LL
+/* The app verifies the feed-declared size and SHA-256 before root.  A fixed
+ * byte count here would make every legitimate ksud rebuild unusable before
+ * the helper itself can be rebuilt.  Zero keeps copy_atomic's regular/nonempty
+ * checks while treating the app's verified source as the integrity authority. */
+#define KSU_EXPECTED_SIZE 0LL
 #define KSU_LOADER_PATH "/data/local/tmp/ksud-s25u-kdp"
 #define KSU_LOADER_TMP "/data/local/tmp/.ksud-loader-refresh"
 #define KSU_STAGE_PATH "/data/local/tmp/.ksud-stage"
