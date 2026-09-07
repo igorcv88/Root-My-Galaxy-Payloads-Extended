@@ -13,13 +13,14 @@ PREFIX = (
 LEGACY_EXPLOIT = pathlib.Path(
     "artifacts/pa3q-S938BXXSBCZG3/cve-2026-43499-app.so"
 )
-V3_EXPLOIT = pathlib.Path(
+V0265_EXPLOIT = pathlib.Path(
     "artifacts/pa3q-S938BXXSBCZG3-v0265/cve-2026-43499-app.so"
 )
+V0266_DIR = pathlib.Path("artifacts/pa3q-S938BXXSBCZG3-v0266")
 LEGACY_EXPLOIT_SHA256 = (
     "ba0894d1214e3c46305d8acb0ab065eb110833b4b9973c9250aca5bfcb98c214"
 )
-V3_EXPLOIT_SHA256 = (
+V0265_EXPLOIT_SHA256 = (
     "1719e9362cd19e58521cb785fcaa40c4613ca854d0c3c9fb8320edf8e9046303"
 )
 V3_KERNELSU_SHA256 = (
@@ -57,10 +58,10 @@ def sha256(path: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
-def validate_v3_artifact(artifact: dict) -> pathlib.Path:
+def validate_v3_artifact(artifact: dict, label: str) -> pathlib.Path:
     expected_sha = artifact["sha256"].lower()
     if not re.fullmatch(r"[0-9a-f]{64}", expected_sha):
-        raise AssertionError("invalid SHA-256 in CZG3 v3 manifest entry")
+        raise AssertionError(f"invalid SHA-256 in CZG3 v3 {label} entry")
     path = local_path(artifact["url"])
     if not path.is_file():
         raise AssertionError(f"missing {path.relative_to(ROOT)}")
@@ -69,6 +70,29 @@ def validate_v3_artifact(artifact: dict) -> pathlib.Path:
     if sha256(path) != expected_sha:
         raise AssertionError(f"SHA-256 mismatch for {path.relative_to(ROOT)}")
     return path
+
+
+def validate_v0266(target: dict, exploit: pathlib.Path) -> None:
+    expected_exploit = ROOT / V0266_DIR / "cve-2026-43499-app.so"
+    if exploit != expected_exploit:
+        raise AssertionError("v0266 exploit path is not canonical")
+    if exploit.stat().st_size != 104128:
+        raise AssertionError("v0266 exploit must remain the fixed 104128-byte release")
+
+    helper = target.get("rootHelper")
+    if not isinstance(helper, dict):
+        raise AssertionError("v0266 requires rootHelper metadata")
+    helper_path = validate_v3_artifact(helper, "rootHelper")
+    expected_helper = ROOT / V0266_DIR / "cve-2026-43499-root"
+    if helper_path != expected_helper:
+        raise AssertionError("v0266 root helper path is not canonical")
+
+    sha_file = ROOT / V0266_DIR / "cve-2026-43499-root.sha256"
+    if not sha_file.is_file():
+        raise AssertionError("v0266 root helper checksum sidecar is missing")
+    expected_line = f"{helper['sha256'].lower()}  cve-2026-43499-root\n"
+    if sha_file.read_text(encoding="utf-8") != expected_line:
+        raise AssertionError("v0266 root helper checksum sidecar drifted")
 
 
 def main() -> None:
@@ -108,18 +132,24 @@ def main() -> None:
     assert target["kernelVersions"] == ["6.6.98"]
     assert target["exactMatch"] == EXPECTED_IDENTITY, "exact S938B identity drifted"
 
-    exploit = validate_v3_artifact(target["exploit"])
-    validate_v3_artifact(target["kernelsu"])
-    assert exploit == ROOT / V3_EXPLOIT, "v3 must keep the restored v0265 payload"
-    assert target["exploit"]["sha256"] == V3_EXPLOIT_SHA256
+    exploit = validate_v3_artifact(target["exploit"], "exploit")
+    validate_v3_artifact(target["kernelsu"], "kernelsu")
     assert target["kernelsu"]["sha256"] == V3_KERNELSU_SHA256
-    assert exploit.read_bytes() != legacy_exploit.read_bytes(), (
-        "v2 legacy and v3 restored payloads unexpectedly collapsed"
-    )
+
+    if exploit == ROOT / V0265_EXPLOIT:
+        assert target["exploit"]["sha256"] == V0265_EXPLOIT_SHA256
+        assert exploit.read_bytes() != legacy_exploit.read_bytes(), (
+            "v2 legacy and v3 restored payloads unexpectedly collapsed"
+        )
+        print("Payload feed is valid (immutable legacy v2 + restored v0265 v3 CZG3)")
+    elif V0266_DIR in exploit.relative_to(ROOT).parents:
+        validate_v0266(target, exploit)
+        print("Payload feed is valid (immutable legacy v2 + tracefs/auto-late-load v0266 CZG3)")
+    else:
+        raise AssertionError(f"unexpected CZG3 v3 exploit path: {exploit.relative_to(ROOT)}")
 
     assert (ROOT / "src/targets/pa3q-S938BXXSBCZG3/target.h").is_file()
     assert (ROOT / "src/targets/pa3q-S938BXXSBCZG3/p0_fingerprint.h").is_file()
-    print("Payload feed is valid (immutable legacy v2 + restored minimal v3 CZG3)")
 
 
 if __name__ == "__main__":
