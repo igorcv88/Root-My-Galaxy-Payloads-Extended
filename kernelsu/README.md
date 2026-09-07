@@ -117,11 +117,11 @@ Published CZG3 artifacts (stored as ordinary Git blobs so commit-pinned raw URLs
 ```text
 android15-6.6_kernelsu-s25u-kdp-v3.3.0.ko
 size: 332416
-SHA-256: 49ea9b561e29dd4f73d626c76978ac5b87d4bbd8f43b607e3b43186385875d8d
+SHA-256: 7e6889f17d25e081205373e1a0a0effcc0a52d5f842cf835223b7019198e2975
 
 ksud-s25u-kdp-v3.3.0
-size: 5096104
-SHA-256: 5a009f1fc58b25a6e197d8ec951a86ec11a9b5ec9d56bdb5f7a3410a22b9b48a
+size: 5104064
+SHA-256: 64bf3b36591ebe0a730045ab3941469588316297d09079dda9858721add9d973
 ```
 
 Static validation confirmed AArch64 ELF64, exact vermagic, 215 undefined symbols
