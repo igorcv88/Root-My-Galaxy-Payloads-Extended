@@ -38,6 +38,7 @@ APP_RELEASE := $(OUTDIR)/cve-2026-43499-app.release.so
 APP_STABLE := $(OUTDIR)/cve-2026-43499-app.stable.so
 APP_RELEASE_SIZE := 104128
 ROOT_HELPER := $(OUTDIR)/cve-2026-43499-root
+ROOT_HELPER_SRCS := src/su_daemon.c src/ksu_bootstrap.c
 TARGET_CFLAGS :=
 APP_RELEASE_OPT := -Oz
 APP_RELEASE_LINK_FLAGS := -Wl,--gc-sections -Wl,--icf=all -s
@@ -125,8 +126,8 @@ $(PRELOAD): $(PRELOAD_SRCS) $(TARGET_HEADER) src/offset.h src/common.h src/kerne
 	$(TARGET_CC) -fPIC $(COMMON_CFLAGS) $(PRELOAD_SRCS) \
 	  -shared -pthread -o $@
 
-$(ROOT_HELPER): src/su_daemon.c | $(OUTDIR)
-	$(TARGET_CC) -fPIE -pie -O2 -g0 -Wall -Wextra $< -ldl -o $@
+$(ROOT_HELPER): $(ROOT_HELPER_SRCS) | $(OUTDIR)
+	$(TARGET_CC) -fPIE -pie -O2 -g0 -Wall -Wextra $(ROOT_HELPER_SRCS) -ldl -o $@
 
 $(APP_PRELOAD): $(APP_PRELOAD_SRCS) $(TARGET_HEADER) src/offset.h src/common.h src/kernelsnitch/*.h | $(OUTDIR)
 	$(TARGET_CC) -DAPP_PAYLOAD=1 $(APP_TARGET_CFLAGS) -fPIC $(COMMON_CFLAGS) $(APP_PRELOAD_SRCS) \
