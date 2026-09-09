@@ -1,0 +1,70 @@
+name: Build ZZI4 DEFEX LSPosed helper
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/oneui9-lsposed-defex-helper
+    paths:
+      - kernelsu/defex-lsposed-helper/**
+      - .github/workflows/build-zzi4-defex-lsposed-helper.yml
+
+permissions:
+  contents: read
+
+env:
+  TARGET_RELEASE: 6.6.127-android15-8-p33f4ffe-abogkiS938BXXUCZZI4-4k
+  DDK_IMAGE: ghcr.io/ylarod/ddk-min:android15-6.6-20260828
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build external helper module
+        run: |
+          set -euo pipefail
+          docker pull "$DDK_IMAGE"
+          docker run --rm --privileged \
+            -v "$GITHUB_WORKSPACE:/work/repo" \
+            -e TARGET_RELEASE="$TARGET_RELEASE" \
+            "$DDK_IMAGE" \
+            bash -lc '
+              set -euo pipefail
+              test -n "${KDIR:-}"
+              test -d "$KDIR"
+
+              mkdir -p "$KDIR/include/config" "$KDIR/include/generated"
+              printf "%s\n" "$TARGET_RELEASE" > "$KDIR/include/config/kernel.release"
+              printf "#define UTS_RELEASE \"%s\"\n" "$TARGET_RELEASE" > "$KDIR/include/generated/utsrelease.h"
+
+              cd /work/repo/kernelsu/defex-lsposed-helper
+              make KDIR="$KDIR" clean || true
+              make KDIR="$KDIR" CC=clang LLVM=1 -j"$(nproc)"
+
+              test -s defex_lsposed_compat.ko
+              llvm-strip -g defex_lsposed_compat.ko
+              test -s defex_lsposed_compat.ko
+
+              echo "=== module info ==="
+              llvm-readelf -p .modinfo defex_lsposed_compat.ko
+              strings defex_lsposed_compat.ko | grep -F "$TARGET_RELEASE"
+            '
+
+      - name: Stage and hash artifact
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp kernelsu/defex-lsposed-helper/defex_lsposed_compat.ko dist/
+          sha256sum dist/defex_lsposed_compat.ko | tee dist/defex_lsposed_compat.ko.sha256
+          ls -lh dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: defex-lsposed-compat-S938BXXUCZZI4
+          path: dist/
+          retention-days: 3
+          if-no-files-found: error
