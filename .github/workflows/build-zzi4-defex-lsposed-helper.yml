@@ -1,4 +1,4 @@
-name: Build ZZI4 DEFEX LSPosed helper
+name: Build ZZI4 DEFEX LSPosed fix
 
 on:
   workflow_dispatch:
@@ -7,24 +7,30 @@ on:
       - fix/oneui9-lsposed-defex-helper
     paths:
       - kernelsu/defex-lsposed-helper/**
+      - kernelsu/patches/apply-v330-lsposed-defex-fix.py
       - .github/workflows/build-zzi4-defex-lsposed-helper.yml
 
 permissions:
-  contents: read
+  contents: write
 
 env:
+  TARGET: pa3q-S938BXXUCZZI4
   TARGET_RELEASE: 6.6.127-android15-8-p33f4ffe-abogkiS938BXXUCZZI4-4k
   DDK_IMAGE: ghcr.io/ylarod/ddk-min:android15-6.6-20260828
+  KSU_REPO: https://github.com/tiann/KernelSU.git
+  KSU_TAG_SHA: 932014ab5b2c9b74a3d11e2ec4d17dd10fc9442e
+  MODULE_NAME: android15-6.6_kernelsu-pa3q-S938BXXUCZZI4-kdp-v3.3.0.ko
+  KSUD_NAME: ksud-pa3q-S938BXXUCZZI4-kdp-v3.3.0
+  ARTIFACT_DIR: artifacts/pa3q-S938BXXUCZZI4-v0300
 
 jobs:
-  build:
+  helper:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
     steps:
       - uses: actions/checkout@v6
 
-      - name: Build external helper module
+      - name: Build external validation helper
         run: |
           set -euo pipefail
           docker pull "$DDK_IMAGE"
@@ -36,31 +42,23 @@ jobs:
               set -euo pipefail
               test -n "${KDIR:-}"
               test -d "$KDIR"
-
               mkdir -p "$KDIR/include/config" "$KDIR/include/generated"
               printf "%s\n" "$TARGET_RELEASE" > "$KDIR/include/config/kernel.release"
               printf "#define UTS_RELEASE \"%s\"\n" "$TARGET_RELEASE" > "$KDIR/include/generated/utsrelease.h"
-
               cd /work/repo/kernelsu/defex-lsposed-helper
               make KDIR="$KDIR" clean || true
               make KDIR="$KDIR" CC=clang LLVM=1 -j"$(nproc)"
-
               test -s defex_lsposed_compat.ko
               llvm-strip -g defex_lsposed_compat.ko
-              test -s defex_lsposed_compat.ko
-
-              echo "=== module info ==="
-              llvm-readelf -p .modinfo defex_lsposed_compat.ko
               strings defex_lsposed_compat.ko | grep -F "$TARGET_RELEASE"
             '
 
-      - name: Stage and hash artifact
+      - name: Upload validation helper
         run: |
           set -euo pipefail
           mkdir -p dist
           cp kernelsu/defex-lsposed-helper/defex_lsposed_compat.ko dist/
           sha256sum dist/defex_lsposed_compat.ko | tee dist/defex_lsposed_compat.ko.sha256
-          ls -lh dist/
 
       - uses: actions/upload-artifact@v4
         with:
@@ -68,3 +66,180 @@ jobs:
           path: dist/
           retention-days: 3
           if-no-files-found: error
+
+  permanent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout fix branch
+        uses: actions/checkout@v6
+        with:
+          ref: fix/oneui9-lsposed-defex-helper
+          fetch-depth: 0
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r29
+
+      - name: Prepare patched KernelSU 3.3.0
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/KernelSU"
+          git clone --filter=blob:none "$KSU_REPO" "$RUNNER_TEMP/KernelSU"
+          cd "$RUNNER_TEMP/KernelSU"
+          git checkout --detach "$KSU_TAG_SHA"
+          test "$(git rev-parse HEAD)" = "$KSU_TAG_SHA"
+          test "$((30000 + $(git rev-list --count HEAD)))" -eq 32601
+          git apply "$GITHUB_WORKSPACE/kernelsu/patches/KernelSU-v3.3.0-samsung-kdp-rkp-defex.patch"
+          python3 "$GITHUB_WORKSPACE/kernelsu/patches/apply-v330-staged-daemon-hotfix.py"
+          python3 "$GITHUB_WORKSPACE/kernelsu/patches/apply-v330-lsposed-defex-fix.py"
+          grep -F 'LSPosed app_process64 exception enabled' kernel/compat/samsung_defex.c
+
+      - name: Build upstream-shaped no-LTO ZZI4 KernelSU module
+        run: |
+          set -euo pipefail
+          docker pull "$DDK_IMAGE"
+          docker run --rm --privileged \
+            -v "$RUNNER_TEMP/KernelSU:/work/KernelSU" \
+            -e TARGET_RELEASE="$TARGET_RELEASE" \
+            "$DDK_IMAGE" \
+            bash -lc '
+              set -euo pipefail
+              git config --global --add safe.directory /work/KernelSU
+              export PATH="$(ls -d /opt/ddk/clang/*/bin | head -1):$PATH"
+              export ARCH=arm64 LLVM=1 LLVM_IAS=1
+              cd /work/KernelSU
+              test -n "${KDIR:-}"
+              test -d "$KDIR"
+              mkdir -p "$KDIR/include/config" "$KDIR/include/generated"
+              printf "%s\n" "$TARGET_RELEASE" > "$KDIR/include/config/kernel.release"
+              printf "#define UTS_RELEASE \"%s\"\n" "$TARGET_RELEASE" > "$KDIR/include/generated/utsrelease.h"
+              cd kernel
+              make -C "$KDIR" M="$PWD" src="$PWD" clean || true
+              make -C "$KDIR" M="$PWD" src="$PWD" \
+                CONFIG_KSU=m \
+                CONFIG_KSU_SAMSUNG_KDP=y \
+                CONFIG_KSU_SAMSUNG_RKP=y \
+                CONFIG_KSU_SAMSUNG_DEFEX=y \
+                CONFIG_KSU_SAMSUNG_NO_PATCH_TEXT=y \
+                CONFIG_LTO_CLANG= \
+                CONFIG_LTO_CLANG_THIN= \
+                CONFIG_LTO_NONE=y \
+                KBUILD_MODPOST_WARN=1 \
+                modules -j"$(nproc)"
+              test -s kernelsu.ko
+              test "$(stat -c %s kernelsu.ko)" -gt 1000000
+              readelf -h kernelsu.ko | grep -F "Machine:                           AArch64" >/dev/null
+              readelf -SW kernelsu.ko | grep -F "__versions" >/dev/null
+              readelf -SW kernelsu.ko | grep -F ".BTF" >/dev/null
+              strings kernelsu.ko | grep -F "$TARGET_RELEASE" >/dev/null
+              strings kernelsu.ko | grep -F "LSPosed app_process64 exception enabled" >/dev/null
+              if readelf -SW kernelsu.ko | grep -E "\.llvm\.lto|\.llvm_bc" >/dev/null; then
+                echo "Unexpected LLVM LTO payload remains in module" >&2
+                exit 1
+              fi
+              echo "KernelSU size=$(stat -c %s kernelsu.ko)"
+              sha256sum kernelsu.ko
+            '
+          cp "$RUNNER_TEMP/KernelSU/kernel/kernelsu.ko" "kernelsu/$MODULE_NAME"
+
+      - name: Build ksud embedding permanent module
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          set -euo pipefail
+          rustup target add aarch64-linux-android
+          cd "$RUNNER_TEMP/KernelSU"
+          test "$((30000 + $(git rev-list --count HEAD)))" -eq 32601
+          mkdir -p userspace/ksud/bin/aarch64
+          cp "$GITHUB_WORKSPACE/kernelsu/$MODULE_NAME" userspace/ksud/bin/aarch64/android15-6.6_kernelsu.ko
+          source .github/scripts/setup-rust-build.sh aarch64-linux-android 26
+          cargo clean -p ksud
+          cargo build --target "$TRIPLE" --release --manifest-path ./userspace/ksud/Cargo.toml
+          cp "target/$TRIPLE/release/ksud" "$GITHUB_WORKSPACE/kernelsu/$KSUD_NAME"
+          test -s "$GITHUB_WORKSPACE/kernelsu/$KSUD_NAME"
+          strings "$GITHUB_WORKSPACE/kernelsu/$KSUD_NAME" | grep -F '32601' >/dev/null
+
+      - name: Update ZZI4 feed metadata, audit note and checksums
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+
+          root = pathlib.Path.cwd()
+          manifest_path = root / 'support/targets-v3.json'
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          matches = [p for p in manifest['payloads'] if p['payloadId'] == os.environ['TARGET']]
+          if len(matches) != 1:
+              raise SystemExit('Expected exactly one ZZI4 target')
+          target = matches[0]
+
+          module = root / 'kernelsu' / os.environ['MODULE_NAME']
+          ksud = root / 'kernelsu' / os.environ['KSUD_NAME']
+          exploit = root / os.environ['ARTIFACT_DIR'] / 'cve-2026-43499-app.so'
+          helper = root / os.environ['ARTIFACT_DIR'] / 'cve-2026-43499-root'
+
+          def meta(path):
+              data = path.read_bytes()
+              return len(data), hashlib.sha256(data).hexdigest()
+
+          module_size, module_sha = meta(module)
+          ksud_size, ksud_sha = meta(ksud)
+          target['kernelsu']['size'] = ksud_size
+          target['kernelsu']['sha256'] = ksud_sha
+          manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+
+          rows = []
+          for item in (exploit, helper, module, ksud):
+              size, digest = meta(item)
+              rows.append(f'{digest}  {item.relative_to(root).as_posix()}')
+              print(f'{item.relative_to(root)} size={size} sha256={digest}')
+          (root / os.environ['ARTIFACT_DIR'] / 'SHA256SUMS').write_text('\n'.join(rows) + '\n', encoding='utf-8')
+
+          note = root / 'kernelsu' / 'S938B-ZZI4-LSPosed-DEFEX.md'
+          note.write_text(
+              '# S938B ZZI4 LSPosed / DEFEX compatibility\n\n'
+              'One UI 9 enables Samsung DEFEX Immutable Root v2 on ZZI4. Hardware testing showed that DEFEX denied root `app_process64` access to `/data/adb/modules/zygisk_lsposed/zygisk/arm64-v8a.so`.\n\n'
+              'The exception was first validated as a standalone kprobe LKM with an exact match on current UID/EUID 0 `app_process64` plus the LSPosed Zygisk dentry tail. With the exception active, the DEFEX violation disappeared; new apps loaded LSPosed; after restarting zygote, `system_server` mapped the LSPosed native library and `LSPosedBridge` became active.\n\n'
+              'The permanent KernelSU Samsung DEFEX handler now applies that same narrow condition. It does not disable DEFEX globally and does not allow arbitrary `/data/adb` access.\n\n'
+              f'Permanent module: `{os.environ["MODULE_NAME"]}`\n\n- size: {module_size}\n- SHA-256: `{module_sha}`\n\n'
+              f'Embedded ksud: `{os.environ["KSUD_NAME"]}`\n\n- size: {ksud_size}\n- SHA-256: `{ksud_sha}`\n',
+              encoding='utf-8'
+          )
+          PY
+
+      - name: Validate permanent artifacts
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/validate_feed.py
+          module="kernelsu/$MODULE_NAME"
+          test "$(stat -c %s "$module")" -gt 1000000
+          readelf -h "$module" | grep -F 'AArch64' >/dev/null
+          readelf -SW "$module" | grep -F '__versions' >/dev/null
+          readelf -SW "$module" | grep -F '.BTF' >/dev/null
+          strings "$module" | grep -F "$TARGET_RELEASE" >/dev/null
+          strings "$module" | grep -F 'LSPosed app_process64 exception enabled' >/dev/null
+          git diff --check
+
+      - name: Publish permanent-fix branch artifacts
+        run: |
+          set -euo pipefail
+          git config user.name 'Root My Galaxy'
+          git config user.email 'root-my-galaxy@users.noreply.github.com'
+          git add \
+            "kernelsu/$MODULE_NAME" \
+            "kernelsu/$KSUD_NAME" \
+            kernelsu/S938B-ZZI4-LSPosed-DEFEX.md \
+            "$ARTIFACT_DIR/SHA256SUMS" \
+            support/targets-v3.json
+          if git diff --cached --quiet; then
+            echo 'No artifact changes.'
+            exit 0
+          fi
+          git commit -m 'Publish permanent ZZI4 LSPosed DEFEX compatibility fix'
+          git push origin HEAD:fix/oneui9-lsposed-defex-helper
