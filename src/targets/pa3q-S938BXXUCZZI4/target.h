@@ -11,7 +11,7 @@
  */
 
 #if defined(APP_PAYLOAD) && APP_PAYLOAD
-#define BUILD_VARIANT_LABEL "pa3q-S938BXXUCZZI4-app-physical-p0-oracle"
+#define BUILD_VARIANT_LABEL "pa3q-S938BXXUCZZI4-app-tracefs-phys-alias"
 #define APP_PHYS_P0_ORACLE 1
 /* Deterministic tracefs KASLR route (shell has readtracefs). */
 #define APP_TRACEFS_SLIDE 1
@@ -19,6 +19,9 @@
  * from tracefs: canonical direct-map writes never land on this build
  * (window=0 across boots) while phys-alias writes succeed. */
 #define APP_TRACEFS_PHYS_ALIAS_DATA 1
+#ifndef DEFAULT_EXPLOIT_ATTEMPTS
+#define DEFAULT_EXPLOIT_ATTEMPTS 4
+#endif
 #else
 #define BUILD_VARIANT_LABEL "pa3q-S938BXXUCZZI4-root-umh"
 #endif
