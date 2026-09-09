@@ -4,8 +4,12 @@
     {
       "payloadId": "pa3q-S938BXXSBCZG3",
       "displayName": "Galaxy S25 Ultra SM-S938B | S938BXXSBCZG3",
-      "models": ["SM-S938B"],
-      "kernelVersions": ["6.6.98"],
+      "models": [
+        "SM-S938B"
+      ],
+      "kernelVersions": [
+        "6.6.98"
+      ],
       "exactMatch": {
         "manufacturer": "samsung",
         "model": "SM-S938B",
@@ -46,8 +50,12 @@
     {
       "payloadId": "pa3q-S938BXXUCZZI4",
       "displayName": "Galaxy S25 Ultra SM-S938B | S938BXXUCZZI4",
-      "models": ["SM-S938B"],
-      "kernelVersions": ["6.6.127"],
+      "models": [
+        "SM-S938B"
+      ],
+      "kernelVersions": [
+        "6.6.127"
+      ],
       "exactMatch": {
         "manufacturer": "samsung",
         "model": "SM-S938B",
@@ -68,8 +76,8 @@
       },
       "kernelsu": {
         "url": "https://raw.githubusercontent.com/igorcv88/Root-My-Galaxy-Payloads-S938B/main/kernelsu/ksud-pa3q-S938BXXUCZZI4-kdp-v3.3.0",
-        "size": 6663376,
-        "sha256": "f1d466ad29bbeb472622d7e16aadc4fff11d4eec6fa61d46e104d347b65a8454"
+        "size": 6664656,
+        "sha256": "d76b44c984b8d6f7121f712d8aa4e7cf0178ff36a8cd531bddaca9dd2fd361e2"
       },
       "rootHelper": {
         "url": "https://raw.githubusercontent.com/igorcv88/Root-My-Galaxy-Payloads-S938B/main/artifacts/pa3q-S938BXXUCZZI4-v0300/cve-2026-43499-root",
