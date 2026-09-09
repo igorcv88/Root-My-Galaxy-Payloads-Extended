@@ -1,0 +1,132 @@
+name: PR35 multi-target validation
+
+on:
+  push:
+    branches:
+      - feat/multi-target-payload-workflow
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r29
+
+      - name: Validate feed and planner
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            .github/scripts/plan_targets.py \
+            .github/scripts/kernelsu_config.py \
+            .github/scripts/verify_build.py \
+            .github/scripts/publish_targets.py \
+            .github/scripts/validate_feed.py
+          python3 .github/scripts/validate_feed.py
+
+          out="$(mktemp)"
+          GITHUB_OUTPUT="$out" TARGET_SELECTION=all UPDATE_MODE=Exploit \
+            python3 .github/scripts/plan_targets.py
+          grep -F 'pa3q-S938BXXSBCZG3' "$out"
+          grep -F 'pa3q-S938BXXUCZZI4' "$out"
+
+          : > "$out"
+          GITHUB_OUTPUT="$out" TARGET_SELECTION=pa3q-S938BXXSBCZG3 UPDATE_MODE=Exploit \
+            python3 .github/scripts/plan_targets.py
+          grep -F 'pa3q-S938BXXSBCZG3' "$out"
+
+          if GITHUB_OUTPUT="$out" TARGET_SELECTION=does-not-exist UPDATE_MODE=Exploit \
+              python3 .github/scripts/plan_targets.py; then
+            echo 'unknown target unexpectedly succeeded' >&2
+            exit 1
+          fi
+          if GITHUB_OUTPUT="$out" TARGET_SELECTION=pa3q-S938BXXUCZZI4 UPDATE_MODE=KernelSU \
+              python3 .github/scripts/plan_targets.py; then
+            echo 'non-reproducible ZZI4 KernelSU unexpectedly scheduled' >&2
+            exit 1
+          fi
+
+          python3 .github/scripts/kernelsu_config.py pa3q-S938BXXSBCZG3 | grep -F 'kernelRelease='
+          if python3 .github/scripts/kernelsu_config.py pa3q-S938BXXUCZZI4; then
+            echo 'ZZI4 unexpectedly exposed reproducible KernelSU inputs' >&2
+            exit 1
+          fi
+
+      - name: Exercise aggregate checksum refresh
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+
+          path = Path('.github/scripts/publish_targets.py')
+          spec = importlib.util.spec_from_file_location('publisher', path)
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+
+          test_dir = module.ROOT / '.checksum-refresh-test'
+          test_dir.mkdir(exist_ok=True)
+          artifact = test_dir / 'payload.bin'
+          artifact.write_bytes(b'test')
+          sums = test_dir / 'SHA256SUMS'
+          sums.write_text('0' * 64 + '  .checksum-refresh-test/payload.bin\n')
+          digest = 'a' * 64
+          assert module.refresh_checksum_file(test_dir, {artifact: digest})
+          assert sums.read_text() == digest + '  .checksum-refresh-test/payload.bin\n'
+          artifact.unlink()
+          sums.unlink()
+          test_dir.rmdir()
+          PY
+
+      - name: Build and compare CZG3
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          TARGET: pa3q-S938BXXSBCZG3
+        run: |
+          set -euo pipefail
+          make TARGET="$TARGET" host-test
+          make TARGET="$TARGET" clean
+          make TARGET="$TARGET" ANDROID_NDK_HOME="$ANDROID_NDK_HOME" release
+          make TARGET="$TARGET" ANDROID_NDK_HOME="$ANDROID_NDK_HOME" "build/$TARGET/cve-2026-43499-root"
+          python3 .github/scripts/verify_build.py "$TARGET"
+          cmp "build/$TARGET/cve-2026-43499-app.release.so" \
+              "artifacts/pa3q-S938BXXSBCZG3-v0266/cve-2026-43499-app.so"
+          cmp "build/$TARGET/cve-2026-43499-root" \
+              "artifacts/pa3q-S938BXXSBCZG3-v0266/cve-2026-43499-root"
+
+      - name: Build and compare ZZI4
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          TARGET: pa3q-S938BXXUCZZI4
+        run: |
+          set -euo pipefail
+          make TARGET="$TARGET" host-test
+          make TARGET="$TARGET" clean
+          make TARGET="$TARGET" ANDROID_NDK_HOME="$ANDROID_NDK_HOME" release
+          make TARGET="$TARGET" ANDROID_NDK_HOME="$ANDROID_NDK_HOME" "build/$TARGET/cve-2026-43499-root"
+          python3 .github/scripts/verify_build.py "$TARGET"
+          cmp "build/$TARGET/cve-2026-43499-app.release.so" \
+              "artifacts/pa3q-S938BXXUCZZI4-v0300/cve-2026-43499-app.so"
+          cmp "build/$TARGET/cve-2026-43499-root" \
+              "artifacts/pa3q-S938BXXUCZZI4-v0300/cve-2026-43499-root"
+          python3 .github/scripts/validate_feed.py
+          git diff --check
+
+      - name: Remove temporary validation workflow
+        run: |
+          set -euo pipefail
+          git config user.name "Root My Galaxy"
+          git config user.email "root-my-galaxy@users.noreply.github.com"
+          git rm .github/workflows/pr35-validation.yml
+          git commit -m "ci: remove temporary PR35 validation"
+          git push origin HEAD:feat/multi-target-payload-workflow
