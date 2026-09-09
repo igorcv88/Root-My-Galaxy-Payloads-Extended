@@ -1,0 +1,239 @@
+name: Prepare ZZI4 target
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - zzi4-target
+    paths:
+      - .github/zzi4-build-trigger
+      - .github/workflows/build-zzi4-target.yml
+      - kernelsu/patches/**
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prepare-zzi4-target
+  cancel-in-progress: false
+
+env:
+  TARGET: pa3q-S938BXXUCZZI4
+  TARGET_RELEASE: 6.6.127-android15-8-p33f4ffe-abogkiS938BXXUCZZI4-4k
+  PR300_REPO: mitschud/Root-My-Galaxy-Payloads
+  PR300_COMMIT: 7ad1dd0079003a463171926d1ccc30903fcc7a5c
+  KSU_REPO: https://github.com/tiann/KernelSU.git
+  KSU_TAG_SHA: 932014ab5b2c9b74a3d11e2ec4d17dd10fc9442e
+  MODULE_NAME: android15-6.6_kernelsu-pa3q-S938BXXUCZZI4-kdp-v3.3.0.ko
+  KSUD_NAME: ksud-pa3q-S938BXXUCZZI4-kdp-v3.3.0
+  ARTIFACT_DIR: artifacts/pa3q-S938BXXUCZZI4-v0300
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@v6
+        with:
+          ref: zzi4-target
+          fetch-depth: 0
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r29
+
+      - name: Import PR300 S938B target sources and exploit
+        env:
+          RAW_BASE: https://raw.githubusercontent.com/${{ env.PR300_REPO }}/${{ env.PR300_COMMIT }}
+        run: |
+          set -euo pipefail
+          mkdir -p "src/targets/$TARGET" "$ARTIFACT_DIR" docs
+          curl -fL "$RAW_BASE/src/targets/$TARGET/target.h" -o "src/targets/$TARGET/target.h"
+          curl -fL "$RAW_BASE/src/targets/$TARGET/p0_fingerprint.h" -o "src/targets/$TARGET/p0_fingerprint.h"
+          curl -fL "$RAW_BASE/docs/SM-S938B-S938BXXUCZZI4.md" -o docs/SM-S938B-S938BXXUCZZI4.md
+          curl -fL "$RAW_BASE/artifacts/$TARGET/cve-2026-43499-app.so" -o "$ARTIFACT_DIR/cve-2026-43499-app.so"
+
+          test "$(stat -c %s "$ARTIFACT_DIR/cve-2026-43499-app.so")" -eq 104128
+          grep -aFq 'pa3q-S938BXXUCZZI4-app-physical-p0-oracle' "$ARTIFACT_DIR/cve-2026-43499-app.so"
+          grep -aFq 'S938BXXUCZZI4' "$ARTIFACT_DIR/cve-2026-43499-app.so"
+          grep -Fq '#define APP_TRACEFS_SLIDE 1' "src/targets/$TARGET/target.h"
+          grep -Fq '#define APP_TRACEFS_PHYS_ALIAS_DATA 1' "src/targets/$TARGET/target.h"
+
+      - name: Build current RMG root helper for ZZI4
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          set -euo pipefail
+          make TARGET="$TARGET" ANDROID_NDK_HOME="$ANDROID_NDK_HOME" \
+            "build/$TARGET/cve-2026-43499-root"
+          helper="build/$TARGET/cve-2026-43499-root"
+          test -s "$helper"
+          strings "$helper" | grep -F -- '--ksu-info'
+          strings "$helper" | grep -F -- '--allow-shell'
+          cp "$helper" "$ARTIFACT_DIR/cve-2026-43499-root"
+
+      - name: Prepare KernelSU 3.3.0 with current Samsung and late-load fixes
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/KernelSU"
+          git clone --filter=blob:none "$KSU_REPO" "$RUNNER_TEMP/KernelSU"
+          cd "$RUNNER_TEMP/KernelSU"
+          git checkout --detach "$KSU_TAG_SHA"
+          test "$(git rev-parse HEAD)" = "$KSU_TAG_SHA"
+          test "$((30000 + $(git rev-list --count HEAD)))" -eq 32601
+          git apply "$GITHUB_WORKSPACE/kernelsu/patches/KernelSU-v3.3.0-samsung-kdp-rkp-defex.patch"
+          python3 "$GITHUB_WORKSPACE/kernelsu/patches/apply-v330-staged-daemon-hotfix.py"
+
+      - name: Build exact ZZI4 KernelSU 3.3.0 module without LTO
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/ylarod/ddk-min:android15-6.6-20260828
+          docker run --rm --privileged \
+            -v "$RUNNER_TEMP/KernelSU:/work/KernelSU" \
+            -e TARGET_RELEASE="$TARGET_RELEASE" \
+            ghcr.io/ylarod/ddk-min:android15-6.6-20260828 \
+            bash -lc '
+              set -euo pipefail
+              git config --global --add safe.directory /work/KernelSU
+              cd /work/KernelSU
+              test -n "${KDIR:-}"
+              test -d "$KDIR"
+              mkdir -p "$KDIR/include/config" "$KDIR/include/generated"
+              printf "%s\n" "$TARGET_RELEASE" > "$KDIR/include/config/kernel.release"
+              printf "#define UTS_RELEASE \"%s\"\n" "$TARGET_RELEASE" > "$KDIR/include/generated/utsrelease.h"
+              cd kernel
+              make clean || true
+              make -C "$KDIR" M="$PWD" src="$PWD" \
+                CONFIG_KSU=m \
+                CONFIG_KSU_SAMSUNG_KDP=y \
+                CONFIG_KSU_SAMSUNG_RKP=y \
+                CONFIG_KSU_SAMSUNG_DEFEX=y \
+                CONFIG_KSU_SAMSUNG_NO_PATCH_TEXT=y \
+                CONFIG_LTO_CLANG= \
+                CONFIG_LTO_CLANG_THIN= \
+                CONFIG_LTO_NONE=y \
+                KBUILD_MODPOST_WARN=1 \
+                modules -j"$(nproc)"
+              test -s kernelsu.ko
+              llvm-strip -d kernelsu.ko
+              llvm-objcopy --remove-section __versions kernelsu.ko || true
+              strings kernelsu.ko | grep -F "$TARGET_RELEASE"
+            '
+          test -s "$RUNNER_TEMP/KernelSU/kernel/kernelsu.ko"
+          cp "$RUNNER_TEMP/KernelSU/kernel/kernelsu.ko" "kernelsu/$MODULE_NAME"
+
+      - name: Audit ZZI4 module shape
+        run: |
+          set -euo pipefail
+          module="kernelsu/$MODULE_NAME"
+          test -s "$module"
+          strings "$module" | grep -F "$TARGET_RELEASE"
+          if readelf -S "$module" | grep -q '__versions'; then
+            echo '__versions is still present in ZZI4 module' >&2
+            exit 1
+          fi
+
+      - name: Build patched KernelSU 3.3.0 ksud with ZZI4 module embedded
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          set -euo pipefail
+          rustup target add aarch64-linux-android
+          cd "$RUNNER_TEMP/KernelSU"
+          test "$((30000 + $(git rev-list --count HEAD)))" -eq 32601
+          mkdir -p userspace/ksud/bin/aarch64
+          cp "$GITHUB_WORKSPACE/kernelsu/$MODULE_NAME" \
+             userspace/ksud/bin/aarch64/android15-6.6_kernelsu.ko
+          source .github/scripts/setup-rust-build.sh aarch64-linux-android 26
+          cargo clean -p ksud
+          cargo build --target "$TRIPLE" --release --manifest-path ./userspace/ksud/Cargo.toml
+          cp "target/$TRIPLE/release/ksud" "$GITHUB_WORKSPACE/kernelsu/$KSUD_NAME"
+          test -s "$GITHUB_WORKSPACE/kernelsu/$KSUD_NAME"
+          strings "$GITHUB_WORKSPACE/kernelsu/$KSUD_NAME" | grep -F '32601' | head -n 1
+
+      - name: Write staging metadata and checksums
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib
+
+          root = pathlib.Path.cwd()
+          artifact_dir = root / os.environ['ARTIFACT_DIR']
+          module = root / 'kernelsu' / os.environ['MODULE_NAME']
+          ksud = root / 'kernelsu' / os.environ['KSUD_NAME']
+          exploit = artifact_dir / 'cve-2026-43499-app.so'
+          helper = artifact_dir / 'cve-2026-43499-root'
+
+          def meta(path):
+              data = path.read_bytes()
+              return {'size': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
+
+          rows = []
+          for p in (exploit, helper, module, ksud):
+              m = meta(p)
+              rows.append(f"{m['sha256']}  {p.relative_to(root).as_posix()}")
+          (artifact_dir / 'SHA256SUMS').write_text('\n'.join(rows) + '\n', encoding='utf-8')
+
+          staging = {
+              'payloadId': os.environ['TARGET'],
+              'model': 'SM-S938B',
+              'device': 'pa3q',
+              'kernelVersion': '6.6.127',
+              'kernelRelease': os.environ['TARGET_RELEASE'],
+              'android': 17,
+              'sdk': 37,
+              'securityPatch': '2026-08-05',
+              'sourceProvenance': {
+                  'exploitRepo': os.environ['PR300_REPO'],
+                  'exploitCommit': os.environ['PR300_COMMIT'],
+                  'exploitUpstreamPr': 300,
+                  'kernelsuVersion': '3.3.0 / 32601',
+                  'lateLoadFix': 'current igorcv88 staged-daemon hotfix'
+              },
+              'exactMatchPendingDeviceProps': True,
+              'exploit': meta(exploit),
+              'rootHelper': meta(helper),
+              'kernelsuModule': meta(module),
+              'kernelsu': meta(ksud),
+          }
+          pathlib.Path('support/zzi4-staging.json').write_text(
+              json.dumps(staging, indent=2) + '\n', encoding='utf-8'
+          )
+          print(json.dumps(staging, indent=2))
+          PY
+
+      - name: Sanity checks
+        run: |
+          set -euo pipefail
+          test -s "$ARTIFACT_DIR/cve-2026-43499-app.so"
+          test -s "$ARTIFACT_DIR/cve-2026-43499-root"
+          test -s "kernelsu/$MODULE_NAME"
+          test -s "kernelsu/$KSUD_NAME"
+          test -s support/zzi4-staging.json
+          git diff --check
+
+      - name: Publish staging artifacts to zzi4-target branch
+        run: |
+          set -euo pipefail
+          git config user.name 'Root My Galaxy'
+          git config user.email 'root-my-galaxy@users.noreply.github.com'
+          git add \
+            "src/targets/$TARGET/target.h" \
+            "src/targets/$TARGET/p0_fingerprint.h" \
+            docs/SM-S938B-S938BXXUCZZI4.md \
+            "$ARTIFACT_DIR/cve-2026-43499-app.so" \
+            "$ARTIFACT_DIR/cve-2026-43499-root" \
+            "$ARTIFACT_DIR/SHA256SUMS" \
+            "kernelsu/$MODULE_NAME" \
+            "kernelsu/$KSUD_NAME" \
+            support/zzi4-staging.json
+          if git diff --cached --quiet; then
+            echo 'ZZI4 staging files already current.'
+            exit 0
+          fi
+          git commit -m 'Prepare S938B ZZI4 target with PR300 exploit and KSU 3.3.0'
+          git push origin HEAD:zzi4-target
