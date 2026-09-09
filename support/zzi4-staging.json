@@ -1,0 +1,34 @@
+{
+  "payloadId": "pa3q-S938BXXUCZZI4",
+  "model": "SM-S938B",
+  "device": "pa3q",
+  "kernelVersion": "6.6.127",
+  "kernelRelease": "6.6.127-android15-8-p33f4ffe-abogkiS938BXXUCZZI4-4k",
+  "android": 17,
+  "sdk": 37,
+  "securityPatch": "2026-08-05",
+  "sourceProvenance": {
+    "exploitRepo": "mitschud/Root-My-Galaxy-Payloads",
+    "exploitCommit": "7ad1dd0079003a463171926d1ccc30903fcc7a5c",
+    "exploitUpstreamPr": 300,
+    "kernelsuVersion": "3.3.0 / 32601",
+    "lateLoadFix": "current igorcv88 staged-daemon hotfix"
+  },
+  "exactMatchPendingDeviceProps": true,
+  "exploit": {
+    "size": 104128,
+    "sha256": "b68984598116206dbede27b28e98fd069f0e0d0cd52c8964b665aaebde7d1712"
+  },
+  "rootHelper": {
+    "size": 31496,
+    "sha256": "788611baf566f0ca9008d28fa7d1b1edb4657efc56e4b5ac24b319ae12519dd4"
+  },
+  "kernelsuModule": {
+    "size": 332280,
+    "sha256": "f87f513bd57bf9998197d74231355b8aa078a22399432f55d265c4e442c8538a"
+  },
+  "kernelsu": {
+    "size": 5101432,
+    "sha256": "68dd46d5ce2c18ab99e6e965470aaff611dff2324294044eca554e21aa9752c3"
+  }
+}
