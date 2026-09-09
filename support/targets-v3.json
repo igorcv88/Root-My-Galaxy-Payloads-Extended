@@ -37,6 +37,14 @@
         "url": "https://raw.githubusercontent.com/igorcv88/Root-My-Galaxy-Payloads-S938B/main/artifacts/pa3q-S938BXXSBCZG3-v0266/cve-2026-43499-root",
         "size": 31496,
         "sha256": "788611baf566f0ca9008d28fa7d1b1edb4657efc56e4b5ac24b319ae12519dd4"
+      },
+      "routePolicy": {
+        "slideRoute": "default",
+        "attempts": 24,
+        "attemptTimeoutSec": 120,
+        "p0AttemptTimeoutSec": 45,
+        "p0OffsetCache": true,
+        "prefersShellTransport": false
       }
     },
     {
@@ -75,6 +83,14 @@
         "url": "https://raw.githubusercontent.com/igorcv88/Root-My-Galaxy-Payloads-S938B/main/artifacts/pa3q-S938BXXUCZZI4-v0300/cve-2026-43499-root",
         "size": 31496,
         "sha256": "788611baf566f0ca9008d28fa7d1b1edb4657efc56e4b5ac24b319ae12519dd4"
+      },
+      "routePolicy": {
+        "slideRoute": "auto",
+        "attempts": 24,
+        "attemptTimeoutSec": 120,
+        "p0AttemptTimeoutSec": 45,
+        "p0OffsetCache": true,
+        "prefersShellTransport": true
       }
     }
   ]
