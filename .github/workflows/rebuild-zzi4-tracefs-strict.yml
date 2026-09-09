@@ -1,0 +1,177 @@
+name: Rebuild ZZI4 strict tracefs payload
+
+on:
+  push:
+    branches:
+      - zzi4-tracefs-strict
+    paths:
+      - .github/workflows/rebuild-zzi4-tracefs-strict.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: zzi4-tracefs-strict
+  cancel-in-progress: false
+
+env:
+  TARGET: pa3q-S938BXXUCZZI4
+  ARTIFACT_DIR: artifacts/pa3q-S938BXXUCZZI4-v0300
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout strict tracefs branch
+        uses: actions/checkout@v6
+        with:
+          ref: zzi4-tracefs-strict
+          fetch-depth: 0
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r29
+
+      - name: Make ZZI4 tracefs route explicit and bounded
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          target = Path('src/targets/pa3q-S938BXXUCZZI4/target.h')
+          text = target.read_text()
+          old = '#define BUILD_VARIANT_LABEL "pa3q-S938BXXUCZZI4-app-physical-p0-oracle"'
+          new = '#define BUILD_VARIANT_LABEL "pa3q-S938BXXUCZZI4-app-tracefs-phys-alias"'
+          if old not in text and new not in text:
+              raise SystemExit('unexpected ZZI4 build label')
+          text = text.replace(old, new)
+          needle = '#define APP_TRACEFS_PHYS_ALIAS_DATA 1\n'
+          bounded = needle + '#ifndef DEFAULT_EXPLOIT_ATTEMPTS\n#define DEFAULT_EXPLOIT_ATTEMPTS 4\n#endif\n'
+          if '#define DEFAULT_EXPLOIT_ATTEMPTS 4' not in text:
+              if needle not in text:
+                  raise SystemExit('tracefs physical-alias marker missing')
+              text = text.replace(needle, bounded, 1)
+          target.write_text(text)
+
+          docs = Path('docs/SM-S938B-S938BXXUCZZI4.md')
+          d = docs.read_text()
+          d = d.replace(
+              'Payload build | 104,128 bytes, label `pa3q-S938BXXUCZZI4-app-physical-p0-oracle`, import audit clean |',
+              'Payload build | 104,128 bytes, label `pa3q-S938BXXUCZZI4-app-tracefs-phys-alias`, import audit clean |',
+          )
+          old_tail = '''- Our first build (tracefs-first slide) failed 0/24: tracefs slide succeeded
+  (0x0c0000, gate passed) but the first raced physical write hit window=0 - the
+  write window only opens after the P0 oracle gate/probe writes have run, which
+  tracefs-derived slides skip.
+- Fix: APP_TRACEFS_SLIDE removed from this target; payload is P0-oracle-only,
+  matching the proven community flow. Artifact updated (sha256 b6898459...).
+'''
+          new_tail = '''- An earlier tracefs-first build used canonical direct-map data writes and failed
+  after KASLR discovery with writer window=0. The route was temporarily published
+  as P0-only while that failure mode was isolated.
+- The corrected hybrid keeps tracefs only for deterministic KASLR discovery and
+  uses the physical-load alias for exploit data (`APP_TRACEFS_PHYS_ALIAS_DATA=1`).
+  Runtime validation is intentionally strict (`SLIDE_SOURCE=tracefs`) so a tracefs
+  failure cannot silently fall back to P0 during hardware testing.
+- The legacy P0 oracle remains compiled as a diagnostic/compatibility fallback,
+  but the exact ZZI4 RMG profile must not request it in the strict route.
+'''
+          if old_tail in d:
+              d = d.replace(old_tail, new_tail)
+          docs.write_text(d)
+          PY
+
+      - name: Build exact ZZI4 release payload
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          set -euo pipefail
+          make clean
+          make TARGET="$TARGET" ANDROID_NDK_HOME="$ANDROID_NDK_HOME" release
+          payload="build/$TARGET/cve-2026-43499-app.release.so"
+          test -s "$payload"
+          test "$(stat -c %s "$payload")" -eq 104128
+          strings "$payload" | grep -F 'pa3q-S938BXXUCZZI4-app-tracefs-phys-alias' >/dev/null
+          strings "$payload" | grep -F 'slide source mode=%s' >/dev/null
+          strings "$payload" | grep -F 'slide tracefs state tracing=' >/dev/null
+          strings "$payload" | grep -F 'slide tracefs caller gate candidate=' >/dev/null
+          strings "$payload" | grep -F 'slide-kaslr-ok source=%s' >/dev/null
+          echo "payload size=$(stat -c %s "$payload")"
+          sha256sum "$payload"
+
+      - name: Publish rebuilt payload into branch feed
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import shutil
+
+          root = pathlib.Path.cwd()
+          target_id = os.environ['TARGET']
+          artifact_dir = root / os.environ['ARTIFACT_DIR']
+          src = root / 'build' / target_id / 'cve-2026-43499-app.release.so'
+          dst = artifact_dir / 'cve-2026-43499-app.so'
+          shutil.copy2(src, dst)
+
+          data = dst.read_bytes()
+          digest = hashlib.sha256(data).hexdigest()
+          size = len(data)
+
+          manifest_path = root / 'support/targets-v3.json'
+          manifest = json.loads(manifest_path.read_text())
+          matches = [p for p in manifest['payloads'] if p['payloadId'] == target_id]
+          if len(matches) != 1:
+              raise SystemExit('expected one exact ZZI4 profile')
+          exploit = matches[0]['exploit']
+          exploit['size'] = size
+          exploit['sha256'] = digest
+          manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+
+          sums_path = artifact_dir / 'SHA256SUMS'
+          lines = sums_path.read_text().splitlines()
+          rel = dst.relative_to(root).as_posix()
+          replaced = False
+          out = []
+          for line in lines:
+              if line.endswith('  ' + rel):
+                  out.append(f'{digest}  {rel}')
+                  replaced = True
+              else:
+                  out.append(line)
+          if not replaced:
+              raise SystemExit('ZZI4 exploit checksum row missing')
+          sums_path.write_text('\n'.join(out) + '\n')
+          print(f'ZZI4 strict tracefs exploit size={size} sha256={digest}')
+          PY
+
+      - name: Validate exact tracefs artifact and feed
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/validate_feed.py
+          payload="$ARTIFACT_DIR/cve-2026-43499-app.so"
+          strings "$payload" | grep -F 'pa3q-S938BXXUCZZI4-app-tracefs-phys-alias' >/dev/null
+          strings "$payload" | grep -F 'slide tracefs state tracing=' >/dev/null
+          strings "$payload" | grep -F 'slide tracefs caller gate candidate=' >/dev/null
+          git diff --check
+
+      - name: Commit strict tracefs payload
+        run: |
+          set -euo pipefail
+          git config user.name 'Root My Galaxy'
+          git config user.email 'root-my-galaxy@users.noreply.github.com'
+          git add \
+            src/targets/pa3q-S938BXXUCZZI4/target.h \
+            docs/SM-S938B-S938BXXUCZZI4.md \
+            "$ARTIFACT_DIR/cve-2026-43499-app.so" \
+            "$ARTIFACT_DIR/SHA256SUMS" \
+            support/targets-v3.json
+          git diff --cached --quiet && { echo 'No changes'; exit 0; }
+          git commit -m 'Rebuild ZZI4 payload with strict tracefs KASLR route'
+          git push origin HEAD:zzi4-tracefs-strict
