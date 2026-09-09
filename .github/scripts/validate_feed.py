@@ -17,13 +17,15 @@ V0265_EXPLOIT = pathlib.Path(
     "artifacts/pa3q-S938BXXSBCZG3-v0265/cve-2026-43499-app.so"
 )
 V0266_DIR = pathlib.Path("artifacts/pa3q-S938BXXSBCZG3-v0266")
+ZZI4_DIR = pathlib.Path("artifacts/pa3q-S938BXXUCZZI4-v0300")
+ZZI4_KSUD = pathlib.Path("kernelsu/ksud-pa3q-S938BXXUCZZI4-kdp-v3.3.0")
 LEGACY_EXPLOIT_SHA256 = (
     "ba0894d1214e3c46305d8acb0ab065eb110833b4b9973c9250aca5bfcb98c214"
 )
 V0265_EXPLOIT_SHA256 = (
     "1719e9362cd19e58521cb785fcaa40c4613ca854d0c3c9fb8320edf8e9046303"
 )
-EXPECTED_IDENTITY = {
+EXPECTED_CZG3_IDENTITY = {
     "manufacturer": "samsung",
     "model": "SM-S938B",
     "device": "pa3q",
@@ -36,6 +38,22 @@ EXPECTED_IDENTITY = {
     "kernelVersionInfo": "#1 SMP PREEMPT Thu Jul  2 00:48:56 UTC 2026",
     "machine": "aarch64",
     "sdk": 36,
+    "abi": "arm64-v8a",
+    "pageSize": 4096,
+}
+EXPECTED_ZZI4_IDENTITY = {
+    "manufacturer": "samsung",
+    "model": "SM-S938B",
+    "device": "pa3q",
+    "buildDisplay": "CP2A.260605.016.S938BXXUCZZI4",
+    "buildFingerprint": (
+        "samsung/pa3qxxx/pa3q:17/CP2A.260605.016/"
+        "S938BXXUCZZI4_OXMCZZI4:user/release-keys"
+    ),
+    "kernelRelease": "6.6.127-android15-8-p33f4ffe-abogkiS938BXXUCZZI4-4k",
+    "kernelVersionInfo": "#1 SMP PREEMPT Wed Sep  2 08:13:43 UTC 2026",
+    "machine": "aarch64",
+    "sdk": 37,
     "abi": "arm64-v8a",
     "pageSize": 4096,
 }
@@ -58,7 +76,7 @@ def sha256(path: pathlib.Path) -> str:
 def validate_v3_artifact(artifact: dict, label: str) -> pathlib.Path:
     expected_sha = artifact["sha256"].lower()
     if not re.fullmatch(r"[0-9a-f]{64}", expected_sha):
-        raise AssertionError(f"invalid SHA-256 in CZG3 v3 {label} entry")
+        raise AssertionError(f"invalid SHA-256 in v3 {label} entry")
     path = local_path(artifact["url"])
     if not path.is_file():
         raise AssertionError(f"missing {path.relative_to(ROOT)}")
@@ -79,7 +97,7 @@ def validate_v0266(target: dict, exploit: pathlib.Path) -> None:
     helper = target.get("rootHelper")
     if not isinstance(helper, dict):
         raise AssertionError("v0266 requires rootHelper metadata")
-    helper_path = validate_v3_artifact(helper, "rootHelper")
+    helper_path = validate_v3_artifact(helper, "CZG3 rootHelper")
     expected_helper = ROOT / V0266_DIR / "cve-2026-43499-root"
     if helper_path != expected_helper:
         raise AssertionError("v0266 root helper path is not canonical")
@@ -92,22 +110,50 @@ def validate_v0266(target: dict, exploit: pathlib.Path) -> None:
         raise AssertionError("v0266 root helper checksum sidecar drifted")
 
 
+def validate_zzi4(target: dict) -> None:
+    assert target["payloadId"] == "pa3q-S938BXXUCZZI4"
+    assert target["models"] == ["SM-S938B"]
+    assert target["kernelVersions"] == ["6.6.127"]
+    assert target["exactMatch"] == EXPECTED_ZZI4_IDENTITY, "exact ZZI4 identity drifted"
+
+    exploit = validate_v3_artifact(target["exploit"], "ZZI4 exploit")
+    expected_exploit = ROOT / ZZI4_DIR / "cve-2026-43499-app.so"
+    assert exploit == expected_exploit, "ZZI4 exploit path is not canonical"
+    assert exploit.stat().st_size == 104128
+
+    helper = validate_v3_artifact(target["rootHelper"], "ZZI4 rootHelper")
+    assert helper == ROOT / ZZI4_DIR / "cve-2026-43499-root"
+
+    ksud = validate_v3_artifact(target["kernelsu"], "ZZI4 KernelSU")
+    assert ksud == ROOT / ZZI4_KSUD
+
+    sums = ROOT / ZZI4_DIR / "SHA256SUMS"
+    assert sums.is_file(), "ZZI4 SHA256SUMS missing"
+    sums_text = sums.read_text(encoding="utf-8")
+    assert target["exploit"]["sha256"] in sums_text
+    assert target["rootHelper"]["sha256"] in sums_text
+    assert target["kernelsu"]["sha256"] in sums_text
+
+    assert (ROOT / "src/targets/pa3q-S938BXXUCZZI4/target.h").is_file()
+    assert (ROOT / "src/targets/pa3q-S938BXXUCZZI4/p0_fingerprint.h").is_file()
+
+
 def main() -> None:
     v2 = json.loads((ROOT / "support/targets-v2.json").read_text(encoding="utf-8"))
     assert v2.get("schemaVersion") == 2
-    assert len(v2.get("targets", [])) == 1, "legacy v2 feed must remain S938B-only"
+    assert len(v2.get("targets", [])) == 1, "legacy v2 feed must remain CZG3-only"
     legacy = v2["targets"][0]
     assert legacy["profileId"] == "pa3q-S938BXXSBCZG3"
-    assert legacy["manufacturer"] == EXPECTED_IDENTITY["manufacturer"]
-    assert legacy["model"] == EXPECTED_IDENTITY["model"]
-    assert legacy["device"] == EXPECTED_IDENTITY["device"]
-    assert legacy["buildDisplay"] == EXPECTED_IDENTITY["buildDisplay"]
-    assert legacy["buildFingerprint"] == EXPECTED_IDENTITY["buildFingerprint"]
-    assert legacy["kernelRelease"] == EXPECTED_IDENTITY["kernelRelease"]
-    assert legacy["kernelBuildVersion"] == EXPECTED_IDENTITY["kernelVersionInfo"]
-    assert legacy["sdk"] == EXPECTED_IDENTITY["sdk"]
-    assert legacy["abi"] == EXPECTED_IDENTITY["abi"]
-    assert legacy["pageSize"] == EXPECTED_IDENTITY["pageSize"]
+    assert legacy["manufacturer"] == EXPECTED_CZG3_IDENTITY["manufacturer"]
+    assert legacy["model"] == EXPECTED_CZG3_IDENTITY["model"]
+    assert legacy["device"] == EXPECTED_CZG3_IDENTITY["device"]
+    assert legacy["buildDisplay"] == EXPECTED_CZG3_IDENTITY["buildDisplay"]
+    assert legacy["buildFingerprint"] == EXPECTED_CZG3_IDENTITY["buildFingerprint"]
+    assert legacy["kernelRelease"] == EXPECTED_CZG3_IDENTITY["kernelRelease"]
+    assert legacy["kernelBuildVersion"] == EXPECTED_CZG3_IDENTITY["kernelVersionInfo"]
+    assert legacy["sdk"] == EXPECTED_CZG3_IDENTITY["sdk"]
+    assert legacy["abi"] == EXPECTED_CZG3_IDENTITY["abi"]
+    assert legacy["pageSize"] == EXPECTED_CZG3_IDENTITY["pageSize"]
 
     legacy_exploit = local_path(legacy["exploit"]["url"])
     assert legacy_exploit == ROOT / LEGACY_EXPLOIT
@@ -122,35 +168,35 @@ def main() -> None:
     v3 = json.loads((ROOT / "support/targets-v3.json").read_text(encoding="utf-8"))
     assert v3.get("schemaVersion") == 3
     payloads = v3.get("payloads")
-    assert isinstance(payloads, list) and len(payloads) == 1, "v3 feed must remain S938B-only"
-    target = payloads[0]
-    assert target["payloadId"] == "pa3q-S938BXXSBCZG3"
+    assert isinstance(payloads, list) and len(payloads) == 2, (
+        "v3 feed must contain exact CZG3 and ZZI4 S938B targets"
+    )
+    by_id = {item["payloadId"]: item for item in payloads}
+    assert set(by_id) == {"pa3q-S938BXXSBCZG3", "pa3q-S938BXXUCZZI4"}
+
+    target = by_id["pa3q-S938BXXSBCZG3"]
     assert target["models"] == ["SM-S938B"]
     assert target["kernelVersions"] == ["6.6.98"]
-    assert target["exactMatch"] == EXPECTED_IDENTITY, "exact S938B identity drifted"
+    assert target["exactMatch"] == EXPECTED_CZG3_IDENTITY, "exact CZG3 identity drifted"
 
-    exploit = validate_v3_artifact(target["exploit"], "exploit")
-    # KernelSU is intentionally rebuildable from the exact KSU_TAG_SHA plus the
-    # versioned Samsung/RMG patches in the canonical workflow. Validate the
-    # published artifact against its feed size/SHA instead of pinning a stale
-    # binary digest here; otherwise every legitimate patched ksud rebuild is
-    # rejected after the workflow has correctly updated the manifest.
-    validate_v3_artifact(target["kernelsu"], "kernelsu")
+    exploit = validate_v3_artifact(target["exploit"], "CZG3 exploit")
+    validate_v3_artifact(target["kernelsu"], "CZG3 KernelSU")
 
     if exploit == ROOT / V0265_EXPLOIT:
         assert target["exploit"]["sha256"] == V0265_EXPLOIT_SHA256
         assert exploit.read_bytes() != legacy_exploit.read_bytes(), (
             "v2 legacy and v3 restored payloads unexpectedly collapsed"
         )
-        print("Payload feed is valid (immutable legacy v2 + restored v0265 v3 CZG3)")
     elif V0266_DIR in exploit.relative_to(ROOT).parents:
         validate_v0266(target, exploit)
-        print("Payload feed is valid (immutable legacy v2 + tracefs/auto-late-load v0266 CZG3)")
     else:
         raise AssertionError(f"unexpected CZG3 v3 exploit path: {exploit.relative_to(ROOT)}")
 
     assert (ROOT / "src/targets/pa3q-S938BXXSBCZG3/target.h").is_file()
     assert (ROOT / "src/targets/pa3q-S938BXXSBCZG3/p0_fingerprint.h").is_file()
+
+    validate_zzi4(by_id["pa3q-S938BXXUCZZI4"])
+    print("Payload feed is valid (immutable CZG3 + exact S938B ZZI4 target)")
 
 
 if __name__ == "__main__":
