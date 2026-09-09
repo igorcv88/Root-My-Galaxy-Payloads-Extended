@@ -19,9 +19,10 @@
  * from tracefs: canonical direct-map writes never land on this build
  * (window=0 across boots) while phys-alias writes succeed. */
 #define APP_TRACEFS_PHYS_ALIAS_DATA 1
-#ifndef DEFAULT_EXPLOIT_ATTEMPTS
-#define DEFAULT_EXPLOIT_ATTEMPTS 4
-#endif
+/* Bounded fops retry: a trigger that never opened its window is
+ * state-neutral (the injected waiter times out and is dequeued), so up
+ * to this many shots may run per boot. Only a landed write ends it. */
+#define APP_FOPS_RETRY_BUDGET 8
 #else
 #define BUILD_VARIANT_LABEL "pa3q-S938BXXUCZZI4-root-umh"
 #endif
