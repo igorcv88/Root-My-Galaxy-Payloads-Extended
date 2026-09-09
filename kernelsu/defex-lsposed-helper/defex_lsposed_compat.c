@@ -89,7 +89,7 @@ static bool is_system_app_process64(const struct task_struct *task)
     return d && qstr_eq(&d->d_name, "bin");
 }
 
-static void log_candidate(const struct task_struct *task, const struct file *file,
+static void log_candidate(struct task_struct *task, const struct file *file,
                           bool same_task, bool root_euid, bool app_process,
                           bool lsposed_file)
 {
@@ -112,11 +112,12 @@ static void log_candidate(const struct task_struct *task, const struct file *fil
     }
 
     pr_info_ratelimited(
-        DRIVER_NAME ": candidate cur=%s/%d task=%s/%d uid=%u euid=%u same=%d app64=%d lspfile=%d file=%s p1=%s p2=%s bypass=%d\n",
+        DRIVER_NAME ": candidate cur=%s/%d task=%s/%d uid=%u euid=%u same=%d root=%d app64=%d lspfile=%d file=%s p1=%s p2=%s bypass=%d\n",
         current->comm, task_pid_nr(current), task ? task->comm : "<null>",
         task ? task_pid_nr(task) : -1, __kuid_val(current_uid()),
-        __kuid_val(current_euid()), same_task ? 1 : 0, app_process ? 1 : 0,
-        lsposed_file ? 1 : 0, file_name, p1, p2, bypass ? 1 : 0);
+        __kuid_val(current_euid()), same_task ? 1 : 0, root_euid ? 1 : 0,
+        app_process ? 1 : 0, lsposed_file ? 1 : 0, file_name, p1, p2,
+        bypass ? 1 : 0);
 }
 
 static int defex_lsposed_pre_handler(struct kprobe *probe, struct pt_regs *regs)
