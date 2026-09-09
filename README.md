@@ -4,15 +4,15 @@
 
 <p align="center">
   <a href="https://github.com/igorcv88/Root-My-Galaxy-S938B/releases/latest"><img alt="App release" src="https://img.shields.io/github/v/release/igorcv88/Root-My-Galaxy-S938B?label=app" /></a>
-  <img alt="Firmware" src="https://img.shields.io/badge/firmware-S938BXXSBCZG3-59636e" />
-  <img alt="Payload" src="https://img.shields.io/badge/payload-v0266-2f81f7" />
+  <img alt="Firmware" src="https://img.shields.io/badge/firmware-CZG3%20%2B%20ZZI4-59636e" />
+  <img alt="Payload" src="https://img.shields.io/badge/payload-v0266%20%2F%20v0300-2f81f7" />
   <img alt="KernelSU" src="https://img.shields.io/badge/KernelSU-3.3.0-2f81f7" />
   <a href="https://github.com/igorcv88/Root-My-Galaxy-Payloads-S938B/actions/workflows/update-payloads.yml"><img alt="Payload build" src="https://img.shields.io/github/actions/workflow/status/igorcv88/Root-My-Galaxy-Payloads-S938B/update-payloads.yml?branch=main&amp;label=payloads" /></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/igorcv88/Root-My-Galaxy-Payloads-S938B" /></a>
 </p>
 
 <p align="center">
-  <strong>Firmware profile, exploit, root helper and KernelSU artifacts for the maintained Root My Galaxy S25 Ultra target.</strong>
+  <strong>Exact firmware profiles, CVE-2026-43499 payloads, root helper and Samsung KernelSU artifacts for the maintained Galaxy S25 Ultra targets.</strong>
 </p>
 
 <p align="center">
@@ -24,149 +24,186 @@
 </p>
 
 > [!WARNING]
-> These payloads use a kernel exploit. A failed run can panic/reboot the device. Use only on devices you own or are explicitly authorized to test.
+> These payloads use a kernel exploit. A failed run can panic or reboot the device. Use only on devices you own or are explicitly authorized to test.
 
-## Maintained target
+## Maintained S938B targets
 
-| | Configuration |
-| --- | --- |
-| Device | Samsung Galaxy S25 Ultra `SM-S938B` (`pa3q`) |
-| Firmware | `S938BXXSBCZG3` |
-| Build display | `BP4A.251205.006.S938BXXSBCZG3` |
-| Android | Android 16 / API 36 |
-| Kernel | `6.6.98-android15-8-pd6ff1cd-abogkiS938BXXSBCZG3-4k` |
-| ABI / page size | `arm64-v8a` / 4K |
-| Current exploit generation | `v0266` |
-| KernelSU userspace | `3.3.0 / 32601` |
+| Payload ID | Firmware / Android | Kernel | Generation | Current status |
+| --- | --- | --- | --- | --- |
+| `pa3q-S938BXXSBCZG3` | `S938BXXSBCZG3` / Android 16 API 36 | `6.6.98-android15-8-pd6ff1cd-abogkiS938BXXSBCZG3-4k` | `v0266` | Legacy maintained S938B profile |
+| `pa3q-S938BXXUCZZI4` | `S938BXXUCZZI4` / Android 17 API 37 | `6.6.127-android15-8-p33f4ffe-abogkiS938BXXUCZZI4-4k` | `v0300` | Current One UI 9 beta profile; exploit + KernelSU handoff hardware validated |
 
-A firmware or kernel update can invalidate the profile and its offsets.
+ZZI4 exact build display is `CP2A.260605.016.S938BXXUCZZI4`, SPL `2026-08-05`, `arm64-v8a`, 4K pages. Every profile is exact-match: firmware/kernel updates can invalidate offsets, KASLR behavior, physical addressing assumptions or the KernelSU module pair.
 
-> [!CAUTION]
-> **v0266 has passed build, feed and static publication validation, but CZG3 hardware validation is still pending.** The current app test has not yet reached the v0266 exploit because it stopped earlier on an APK root-helper packaging mismatch. Until a real-device v0266 root completes successfully, do not treat this generation as the hardware-known-good CZG3 baseline. The immutable legacy v2 artifact remains the previously hardware-validated reference.
+## Current v3 feed
 
-## Current v0266 artifacts
+`support/targets-v3.json` is the canonical app-facing manifest. Each profile publishes exact exploit, KernelSU and root-helper metadata plus a per-target exploit `routePolicy`.
 
-The current v3 feed publishes a three-artifact set for CZG3:
+### CZG3
 
 | Artifact | Path | Size | SHA-256 |
 | --- | --- | ---: | --- |
-| Exploit | `artifacts/pa3q-S938BXXSBCZG3-v0266/cve-2026-43499-app.so` | 104128 | `ae4fffba942a131f6c9fa144f7406a0a337638c8b5b660feb04e9c7c9b5555b4` |
-| Root helper | `artifacts/pa3q-S938BXXSBCZG3-v0266/cve-2026-43499-root` | 28704 | `0b4a12341225526a6e26daa9db2ba9615e7203b862a68b502fd4030c09a671c9` |
-| KernelSU | `kernelsu/ksud-s25u-kdp-v3.3.0` | 5096104 | `5a009f1fc58b25a6e197d8ec951a86ec11a9b5ec9d56bdb5f7a3410a22b9b48a` |
+| Exploit | `artifacts/pa3q-S938BXXSBCZG3-v0266/cve-2026-43499-app.so` | 104128 | `1719e9362cd19e58521cb785fcaa40c4613ca854d0c3c9fb8320edf8e9046303` |
+| Root helper | `artifacts/pa3q-S938BXXSBCZG3-v0266/cve-2026-43499-root` | 31496 | `788611baf566f0ca9008d28fa7d1b1edb4657efc56e4b5ac24b319ae12519dd4` |
+| KernelSU | `kernelsu/ksud-s25u-kdp-v3.3.0` | 5101328 | `9c07ab0f9922cef5a8ef0c7805967d1019bf9e084553bc994e7a42c9347bdab1` |
 
-The app release workflow pins the payload repository to a specific commit, verifies the root-helper size/SHA-256 from the feed and embeds that exact helper into the APK.
-
-## What v0266 changes
-
-v0266 is intentionally narrow. It keeps the restored minimal CZG3 exploit race and adds only changes with a clear reliability or handoff purpose.
-
-### Tracefs KASLR route
-
-The existing application-payload Tracefs slide implementation is enabled for CZG3 with event ID **109**. The goal is to obtain a deterministic KASLR slide when the execution context is allowed to use Tracefs.
-
-The physical/P0 route remains available as fallback. v0266 therefore does not assume Tracefs access from every Android SELinux domain.
-
-### Root-helper auto-late-load
-
-After bootstrap root lands, the root helper can immediately perform the KernelSU handoff itself rather than waiting for a second app/client command.
-
-The adapted sequence is:
+Route policy:
 
 ```text
-exploit obtains UID 0
+slideRoute=default
+attempts=24
+attemptTimeoutSec=120
+p0AttemptTimeoutSec=45
+p0OffsetCache=true
+prefersShellTransport=false
+```
+
+### ZZI4
+
+| Artifact | Path | Size | SHA-256 |
+| --- | --- | ---: | --- |
+| Exploit | `artifacts/pa3q-S938BXXUCZZI4-v0300/cve-2026-43499-app.so` | 104128 | `14143d6c5385e4c46bd34dc335772e9d1bcae7f5c102e34a6b142b875395df2b` |
+| Root helper | `artifacts/pa3q-S938BXXUCZZI4-v0300/cve-2026-43499-root` | 31496 | `788611baf566f0ca9008d28fa7d1b1edb4657efc56e4b5ac24b319ae12519dd4` |
+| KernelSU | `kernelsu/ksud-pa3q-S938BXXUCZZI4-kdp-v3.3.0` | 6663376 | `f1d466ad29bbeb472622d7e16aadc4fff11d4eec6fa61d46e104d347b65a8454` |
+
+Route policy:
+
+```text
+slideRoute=auto
+attempts=24
+attemptTimeoutSec=120
+p0AttemptTimeoutSec=45
+p0OffsetCache=true
+prefersShellTransport=true
+```
+
+The root helper is intentionally shared between these current S938B profiles; exploit and KernelSU artifacts remain target-specific.
+
+## ZZI4 exploit port
+
+ZZI4 is not a blind offset bump from CZG3. Android 17 / kernel 6.6.127 required a separate target derivation from the exact kernel Image/BTF and hardware validation of the KASLR/data-write route.
+
+The current production target label is:
+
+```text
+pa3q-S938BXXUCZZI4-app-tracefs-phys-alias
+```
+
+The application payload enables:
+
+- deterministic Tracefs KASLR discovery when shell transport can read Tracefs;
+- `APP_TRACEFS_PHYS_ALIAS_DATA=1`, because the slide source and data-addressing mode are different concerns on this firmware;
+- `APP_PHYS_P0_ORACLE=1` as the physical P0 oracle/fallback path;
+- a bounded `APP_FOPS_RETRY_BUDGET=8`;
+- shared writer state across FOPS shots so retries stop once a write actually lands;
+- rotated trigger delays across retry shots.
+
+The key hardware finding was that canonical direct-map writes did not land reliably on ZZI4, while physical-load-alias writes did. The current target therefore keeps Tracefs for slide discovery but addresses kernel data through the physical-load alias.
+
+The current build has completed an on-device root run on SM-S938B/ZZI4 with Tracefs KASLR, `data_mode=physical-alias`, `window=1`, a landed physical write and complete KernelSU activation in supervisor attempt 1.
+
+The more invasive sync-pselect synchronization experiment remains parked. It is not part of the current payload and should only be reconsidered if repeated hardware runs show `source=tracefs`, physical-alias addressing and rotating FOPS shots but persistent `window=0` failures.
+
+## Root helper and KernelSU handoff
+
+After bootstrap UID 0 lands, the root helper can perform the KernelSU handoff immediately instead of relying on a second app round trip.
+
+The S938B flow preserves the Samsung-specific invariants needed for KDP/RKP/DEFEX and Safeplace-style restrictions:
+
+```text
+exploit obtains bootstrap UID 0
         ↓
-stage ksud / prepare /data/adb
+verified ksud is pre-staged
         ↓
-private mount namespace
-        ↓
-bind ksud over /system/bin/logcat
+DEFEX-safe bind execution over /system/bin/logcat
         ↓
 ksud late-load --allow-shell
         ↓
-KernelSU active / SELinux restored
+switch into PID1 mount namespace
         ↓
-loader remains as daemon
+KernelSU/module mount stages complete globally
+        ↓
+boot-scoped readiness marker published
 ```
 
-This removes the client round-trip race between exploit success and late-load. The app still retains an explicit `--late-load` fallback if auto-late-load is not ready.
+The app retains a serialized client `--late-load` fallback when auto-late-load does not reach global readiness, but the custom KernelSU patch serializes callers and suppresses same-boot lifecycle replay.
 
-### DEFEX-safe execution
+## ZZI4 staged-daemon hotfix
 
-The helper executes the staged loader through a bind mount over `/system/bin/logcat` inside a private mount namespace rather than directly executing a `/data` path. This is retained specifically for Samsung DEFEX/Safeplace-style restrictions.
+ZZI4 keeps a firmware-sensitive KernelSU 3.3.0 userspace/module pair and the S938B staged-daemon hotfix.
 
-### `--allow-shell`
+The hotfix exists because early ZZI4 bring-up exposed two important failure modes: Samsung security policy could reject pre-KernelSU filesystem operations/opening the running executable, and module/systemless mounts created inside the private DEFEX trampoline namespace would disappear when that namespace exited.
 
-KernelSU is late-loaded with `--allow-shell`, allowing the authenticated ADB shell used by the companion app's post-root automation to obtain KernelSU root. This is a post-root capability; the exploit itself remains standalone when Auto Root runs.
+The current fix therefore:
 
-### Daemon-stay and post-root markers
+- serializes late-load through an abstract AF_UNIX lock, avoiding a pre-KernelSU filesystem lock;
+- reads the kernel `boot_id` and skips duplicate late-load stage replay on the same boot;
+- switches from the private trampoline mount namespace into PID1's mount namespace before owning module/systemless mounts;
+- stages the daemon from a verified pre-uploaded `/data/local/tmp/.ksud-stage` via rename rather than reopening `/proc/self/exe` under the bootstrap security context;
+- publishes `/data/local/tmp/.rmg-ksu-late-load-ready` only after blocking mount stages complete.
 
-The helper remains alive as the KernelSU daemon after late-load so the root handoff is not tied to the lifetime of the app/ADB client. Lightweight post-root markers and `ksu_late_load.log` document the late-load stages without inserting structured instrumentation into the FOPS race.
+These behaviors are part of the KernelSU artifact itself. App-side post-root automation must not replace `/data/adb/ksud`, restage `.ksud-stage`, or invoke another unsynchronized late-load sequence.
 
-## What v0266 deliberately does not change
+## Why ZZI4 KernelSU is not rebuilt by generic CI
 
-The CZG3 production path still avoids the experimental instrumentation that previously affected reliability. v0266 does **not** reintroduce:
+`.github/build-targets.json` declares ZZI4 with:
 
-- External Observer coupling;
-- `czg3_diag` race instrumentation;
-- pselect state gates;
-- Auto SIGRETURN interception;
-- global syscall wrappers;
-- keeper-guard race telemetry;
-- broad timing sweeps or new FOPS mutations.
+```json
+"kernelSu": null
+```
 
-The existing FOPS timing/retry behavior is kept separate from the Tracefs and KernelSU handoff changes so hardware validation can identify which layer actually changed.
+That is intentional. The ZZI4 module/ksud pair is hand-built/non-LTO/symbol-pinned and must be preserved rather than silently regenerated by generic CI. Payload/root-helper publication can still be automated for the target while the known-good KernelSU pair remains immutable unless a deliberate rebuild procedure is performed.
 
-## Support feed and helper binding
+CZG3 retains an automated KernelSU build descriptor because its pair is reproducible through the configured DDK path.
 
-`support/targets-v3.json` now carries `exploit`, `kernelsu` and `rootHelper` metadata, each with URL, exact size and SHA-256.
+## Target-agnostic publication workflow
 
-This matters because the root helper is no longer just a generic APK implementation detail: v0266 helper behavior and v0266 exploit behavior are a matched generation. The app therefore fails closed if its bundled helper does not match the profile.
+`Atualizar Payloads` is no longer hardcoded to one firmware. The workflow plans one or all declared build targets from `.github/build-targets.json`, records a single source commit, and all matrix build jobs check out that exact revision.
 
-A last-known-good offline cache in the app is also keyed by all three digests. Pre-v0266 caches without helper metadata must be refreshed through a successful Manual Online run.
+Publication then re-checks `origin/main` before mutation and immediately before commit/push. If `main` advanced, publication aborts and requires a rerun instead of rebasing stale binaries onto newer source.
 
-## Auto Root relationship
+For changed artifacts it refreshes target metadata, `support/targets-v3.json`, root-helper sidecars and existing per-target aggregate `SHA256SUMS` files. The historical CZG3 rebuild trigger remains explicitly scoped to CZG3.
 
-This repository does not itself schedule Auto Root. The companion app does that. Its intended policy is:
+This means a ZZI4 source update cannot accidentally rebuild the hand-built KernelSU pair, and a concurrent merge cannot silently publish artifacts produced from an older source tree.
 
-- Auto Root uses only the last-known-good offline set;
-- Auto Root is always Standalone for root acquisition;
-- no network, Shizuku or Wireless ADB dependency is introduced into the exploit race;
-- post-root ADB/Shizuku automation starts only after KernelSU has been verified.
+## Feed/app contract
+
+The companion app treats the feed as authoritative target data rather than embedding firmware route choices in application code.
+
+The feed currently supplies:
+
+- exact device/build/kernel identity;
+- exploit artifact URL/size/SHA-256;
+- KernelSU artifact URL/size/SHA-256;
+- root-helper URL/size/SHA-256;
+- `routePolicy` for Manual and Auto Root.
+
+The app's last-known-good offline cache is bound to the full target set and route policy. A hash-identical artifact can therefore be refreshed when only route policy changes.
 
 ## Legacy artifacts
 
-The hardware-validated legacy v2 artifact remains immutable at its historical path for previously released clients. v0266 uses a separate versioned artifact directory and must not overwrite the v2 payload.
+Historical artifacts remain separate from current versioned directories. Updating `v0266` or `v0300` must not overwrite immutable legacy paths consumed by older clients.
 
-The workflow validator checks this separation before publication.
-
-## Building and publishing
-
-Use the `Atualizar Payloads` workflow on `main`. For an exploit update it:
-
-1. builds the CZG3 app payload and matching root helper with the pinned Android NDK;
-2. verifies expected artifact size and feed invariants;
-3. publishes the versioned v0266 exploit and helper;
-4. updates `support/targets-v3.json` with exact hashes;
-5. validates that legacy v2 is unchanged.
-
-The companion app should only be released after this workflow has published the new helper metadata, because the app release workflow consumes that feed to embed the matching helper.
+The publication validators preserve that separation and fail closed on artifact/feed inconsistencies.
 
 ## Technical documentation
 
 - [Support feed and matching rules](support/README.md)
 - [Firmware-to-profile porting procedure](docs/PORTING.md)
 - [Samsung KernelSU late-load builds](kernelsu/README.md)
-- `analysis/SM-S938B-S938BXXSBCZG3/` contains the CZG3 derivation and v0266 rollout notes.
+- `analysis/SM-S938B-S938BXXSBCZG3/` — CZG3 derivation/history
+- `src/targets/pa3q-S938BXXUCZZI4/` — current ZZI4 target constants and physical-alias policy
+- `kernelsu/patches/KernelSU-v3.3.0-s938b-staged-daemon-hotfix.patch` — S938B late-load namespace/staging hotfix
 
 ## Credits and provenance
 
-This repository is a derivative work assembled from several upstream projects and individual contributions. The following sources materially underpin the current implementation:
+This repository is a derivative work assembled from several upstream projects and individual contributions.
 
 - **[BuSung-dev/Root-My-Galaxy-Payloads](https://github.com/BuSung-dev/Root-My-Galaxy-Payloads)** — upstream payload/feed structure, build tooling and Samsung target integration.
-- **[BuSung-dev/Root-My-Galaxy](https://github.com/BuSung-dev/Root-My-Galaxy)** — companion application and the original Root My Galaxy project architecture.
-- **[mitschud](https://github.com/mitschud)** / **[upstream PR #300](https://github.com/BuSung-dev/Root-My-Galaxy-Payloads/pull/300)** — the hardware-tested Galaxy S25 `6.6.127` contribution from which the Tracefs KASLR route and root-helper auto-late-load pattern were adapted: event ID 109, `--allow-shell`, DEFEX-safe `/system/bin/logcat` bind execution, daemon-stay and late-load step markers.
-- **[NebuSec/CyberMeowfia](https://github.com/NebuSec/CyberMeowfia/tree/main/IonStack/CVE-2026-43499/exploit)** — published CVE-2026-43499 exploit source forming the exploit lineage used by Root My Galaxy.
-- **[KernelSU](https://github.com/tiann/KernelSU)** by tiann and contributors — kernel root framework and `ksud` late-load/userspace lifecycle.
-- **[HyperRamzey/Root-My-Galaxy](https://github.com/HyperRamzey/Root-My-Galaxy)** — companion-fork work used on the app side for persistent local ADB/Shizuku and post-root lifecycle behavior; its device-tested lifecycle informed how v0266's `--allow-shell` handoff is consumed.
+- **[BuSung-dev/Root-My-Galaxy](https://github.com/BuSung-dev/Root-My-Galaxy)** — companion application and original Root My Galaxy architecture.
+- **[mitschud](https://github.com/mitschud)** / **[upstream PR #300](https://github.com/BuSung-dev/Root-My-Galaxy-Payloads/pull/300)** — Galaxy S25 kernel-6.6.127 Tracefs KASLR contribution, root-helper auto-late-load pattern and writer timing reference used by the ZZI4 port.
+- **[NebuSec/CyberMeowfia](https://github.com/NebuSec/CyberMeowfia/tree/main/IonStack/CVE-2026-43499/exploit)** — published CVE-2026-43499 exploit source forming the exploit lineage.
+- **[KernelSU](https://github.com/tiann/KernelSU)** by tiann and contributors — kernel root framework, `ksud` late-load, module lifecycle and native userspace soft-reboot behavior consumed by the companion app.
+- **[HyperRamzey/Root-My-Galaxy](https://github.com/HyperRamzey/Root-My-Galaxy)** — reference for the app-side persistent local ADB/Shizuku and post-root coordination architecture.
 
-Each upstream project and contribution remains subject to its own license and copyright notices. This repository is distributed under the license in [LICENSE](LICENSE).
+Each upstream project and contribution remains subject to its own license and copyright notices. This repository is distributed under [LICENSE](LICENSE).
