@@ -100,10 +100,10 @@ jobs:
               stat -c "%s" kernelsu.ko
               sha256sum kernelsu.ko
               test "$(stat -c %s kernelsu.ko)" -gt 1000000
-              readelf -h kernelsu.ko | grep -Fq "Machine:                           AArch64"
-              strings kernelsu.ko | grep -Fq "$TARGET_RELEASE"
-              readelf -SW kernelsu.ko | grep -q "__versions"
-              if readelf -SW kernelsu.ko | grep -Eq "\.llvm\.lto|\.llvm_bc"; then
+              readelf -h kernelsu.ko | grep -F "Machine:                           AArch64" >/dev/null
+              strings kernelsu.ko | grep -F "$TARGET_RELEASE" >/dev/null
+              readelf -SW kernelsu.ko | grep -F "__versions" >/dev/null
+              if readelf -SW kernelsu.ko | grep -E "\.llvm\.lto|\.llvm_bc" >/dev/null; then
                 echo "Unexpected LLVM LTO payload remains in module" >&2
                 exit 1
               fi
@@ -127,7 +127,7 @@ jobs:
           cargo build --target "$TRIPLE" --release --manifest-path ./userspace/ksud/Cargo.toml
           cp "target/$TRIPLE/release/ksud" "$GITHUB_WORKSPACE/kernelsu/$KSUD_NAME"
           test -s "$GITHUB_WORKSPACE/kernelsu/$KSUD_NAME"
-          strings "$GITHUB_WORKSPACE/kernelsu/$KSUD_NAME" | grep -F '32601' | head -n 1
+          strings "$GITHUB_WORKSPACE/kernelsu/$KSUD_NAME" | grep -F '32601' >/dev/null
 
       - name: Update ZZI4 feed metadata and checksums
         run: |
@@ -176,9 +176,9 @@ jobs:
           python3 .github/scripts/validate_feed.py
           module="kernelsu/$MODULE_NAME"
           test "$(stat -c %s "$module")" -gt 1000000
-          readelf -h "$module" | grep -Fq 'AArch64'
-          readelf -SW "$module" | grep -q '__versions'
-          strings "$module" | grep -Fq "$TARGET_RELEASE"
+          readelf -h "$module" | grep -F 'AArch64' >/dev/null
+          readelf -SW "$module" | grep -F '__versions' >/dev/null
+          strings "$module" | grep -F "$TARGET_RELEASE" >/dev/null
           git diff --check
 
       - name: Publish fix branch artifacts
