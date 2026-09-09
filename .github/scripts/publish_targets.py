@@ -26,6 +26,49 @@ def metadata(path: pathlib.Path) -> tuple[int, str]:
     return len(data), hashlib.sha256(data).hexdigest()
 
 
+def refresh_checksum_file(
+    artifact_dir: pathlib.Path,
+    updates: dict[pathlib.Path, str],
+) -> bool:
+    """Refresh changed artifact digests in a target aggregate SHA256SUMS.
+
+    Some legacy targets do not carry an aggregate checksum file. Those are
+    deliberately left alone. For targets that do, every changed artifact must
+    be reflected in the same commit as the rebuilt bytes and feed metadata.
+    """
+    sums_path = artifact_dir / "SHA256SUMS"
+    if not sums_path.is_file() or not updates:
+        return False
+
+    rel_updates = {
+        path.relative_to(ROOT).as_posix(): digest
+        for path, digest in updates.items()
+    }
+    lines = sums_path.read_text(encoding="utf-8").splitlines()
+    output: list[str] = []
+    seen: set[str] = set()
+
+    for line in lines:
+        parts = line.split(maxsplit=1)
+        if len(parts) == 2:
+            rel = parts[1].strip()
+            if rel in rel_updates:
+                output.append(f"{rel_updates[rel]}  {rel}")
+                seen.add(rel)
+                continue
+        output.append(line)
+
+    for rel in sorted(set(rel_updates) - seen):
+        output.append(f"{rel_updates[rel]}  {rel}")
+
+    new_text = "\n".join(output) + "\n"
+    old_text = sums_path.read_text(encoding="utf-8")
+    if new_text == old_text:
+        return False
+    sums_path.write_text(new_text, encoding="utf-8")
+    return True
+
+
 def update_kernelsu_readme(module: pathlib.Path, ksud: pathlib.Path) -> None:
     module_size, module_digest = metadata(module)
     ksud_size, ksud_digest = metadata(ksud)
@@ -64,9 +107,10 @@ def main() -> None:
         entry = descriptor[target_id]
         feed = by_id[target_id]
         staged = dist / target_id
+        artifact_dir = ROOT / entry["artifactDir"]
+        checksum_updates: dict[pathlib.Path, str] = {}
 
         if "Exploit" in mode:
-            artifact_dir = ROOT / entry["artifactDir"]
             artifact_dir.mkdir(parents=True, exist_ok=True)
             exploit = artifact_dir / "cve-2026-43499-app.so"
             helper = artifact_dir / "cve-2026-43499-root"
@@ -79,12 +123,15 @@ def main() -> None:
                 "size": size,
                 "sha256": digest,
             }
+            checksum_updates[exploit] = digest
+
             helper_size, helper_digest = metadata(helper)
             feed["rootHelper"] = {
                 "url": PREFIX + helper.relative_to(ROOT).as_posix(),
                 "size": helper_size,
                 "sha256": helper_digest,
             }
+            checksum_updates[helper] = helper_digest
             (artifact_dir / "cve-2026-43499-root.sha256").write_text(
                 f"{helper_digest}  cve-2026-43499-root\n", encoding="utf-8"
             )
@@ -97,7 +144,11 @@ def main() -> None:
             ksud = ROOT / "kernelsu" / kernelsu["ksudName"]
             shutil.copy2(staged / kernelsu["moduleName"], module)
             shutil.copy2(staged / kernelsu["ksudName"], ksud)
+
+            _, module_digest = metadata(module)
+            checksum_updates[module] = module_digest
             size, digest = metadata(ksud)
+            checksum_updates[ksud] = digest
             feed["kernelsu"]["url"] = PREFIX + ksud.relative_to(ROOT).as_posix()
             feed["kernelsu"]["size"] = size
             feed["kernelsu"]["sha256"] = digest
@@ -105,6 +156,10 @@ def main() -> None:
                 update_kernelsu_readme(module, ksud)
             changed.append("kernelsu")
             print(f"{target_id}: ksud {size} bytes {digest}")
+
+        if refresh_checksum_file(artifact_dir, checksum_updates):
+            changed.append(entry["artifactDir"])
+            print(f"{target_id}: refreshed {artifact_dir.relative_to(ROOT) / 'SHA256SUMS'}")
 
     # Written once, after every target succeeded, so a mid-run failure never
     # leaves the feed describing artifacts that were not published.

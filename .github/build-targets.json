@@ -40,7 +40,7 @@
     "pa3q-S938BXXUCZZI4": {
       "artifactDir": "artifacts/pa3q-S938BXXUCZZI4-v0300",
       "expectedLabel": "pa3q-S938BXXUCZZI4-app-tracefs-phys-alias",
-      "expectedExploitSize": null,
+      "expectedExploitSize": 104128,
       "requiredHelperStrings": [
         "auto-late-load: starting ksud daemon",
         "--ksu-info",

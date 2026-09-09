@@ -39,10 +39,16 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       targets: ${{ steps.plan.outputs.targets }}
+      source_sha: ${{ steps.source.outputs.sha }}
     steps:
       - uses: actions/checkout@v6
         with:
           ref: main
+          fetch-depth: 0
+
+      - name: Fixar revisão de origem
+        id: source
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Resolver seleção
         id: plan
@@ -64,7 +70,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ needs.plan.outputs.source_sha }}
           fetch-depth: 0
 
       - name: Preparar Android NDK
@@ -199,8 +205,20 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ needs.plan.outputs.source_sha }}
           fetch-depth: 0
+
+      - name: Confirmar que main não mudou durante o build
+        env:
+          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          current="$(git rev-parse origin/main)"
+          if [ "$current" != "$SOURCE_SHA" ]; then
+            echo "::error::main avançou de $SOURCE_SHA para $current durante o build; abortando publicação de artefatos obsoletos. Reexecute o workflow."
+            exit 1
+          fi
 
       - uses: actions/download-artifact@v4
         with:
@@ -234,6 +252,7 @@ jobs:
           UPDATE_MODE: ${{ inputs.atualizar }}
           TARGETS: ${{ needs.plan.outputs.targets }}
           CHANGED_PATHS: ${{ steps.publish.outputs.paths }}
+          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
         run: |
           set -euo pipefail
           git config user.name "Root My Galaxy"
@@ -249,8 +268,13 @@ jobs:
             exit 0
           fi
 
+          git fetch origin main
+          current="$(git rev-parse origin/main)"
+          if [ "$current" != "$SOURCE_SHA" ]; then
+            echo "::error::main avançou para $current antes da publicação; os artefatos foram gerados de $SOURCE_SHA. Reexecute o workflow."
+            exit 1
+          fi
+
           git commit -m "Update payloads ($TARGETS): $UPDATE_MODE"
-          # main may have moved while the matrix was building.
-          git pull --rebase origin main
           python3 .github/scripts/validate_feed.py
           git push origin HEAD:main
