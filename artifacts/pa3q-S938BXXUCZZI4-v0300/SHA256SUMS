@@ -1,4 +1,4 @@
 b68984598116206dbede27b28e98fd069f0e0d0cd52c8964b665aaebde7d1712  artifacts/pa3q-S938BXXUCZZI4-v0300/cve-2026-43499-app.so
 788611baf566f0ca9008d28fa7d1b1edb4657efc56e4b5ac24b319ae12519dd4  artifacts/pa3q-S938BXXUCZZI4-v0300/cve-2026-43499-root
-f87f513bd57bf9998197d74231355b8aa078a22399432f55d265c4e442c8538a  kernelsu/android15-6.6_kernelsu-pa3q-S938BXXUCZZI4-kdp-v3.3.0.ko
-68dd46d5ce2c18ab99e6e965470aaff611dff2324294044eca554e21aa9752c3  kernelsu/ksud-pa3q-S938BXXUCZZI4-kdp-v3.3.0
+ebb1f3fce8a076a9577b64799995a9c714cebccbf9790642b5cc4eead45636db  kernelsu/android15-6.6_kernelsu-pa3q-S938BXXUCZZI4-kdp-v3.3.0.ko
+f1d466ad29bbeb472622d7e16aadc4fff11d4eec6fa61d46e104d347b65a8454  kernelsu/ksud-pa3q-S938BXXUCZZI4-kdp-v3.3.0
