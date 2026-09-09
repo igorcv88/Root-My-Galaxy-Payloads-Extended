@@ -24,4 +24,5 @@ jobs:
           gh workflow run update-payloads.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
+            -f 'target=pa3q-S938BXXSBCZG3' \
             -f 'atualizar=Exploit + KernelSU'

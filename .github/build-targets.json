@@ -1,0 +1,63 @@
+{
+  "_comment": [
+    "Build descriptor for the payload publication workflow.",
+    "Every entry here is a target the workflow is allowed to rebuild and",
+    "publish. A target present in src/targets/ but missing here is built",
+    "manually and is deliberately preserved untouched by the workflow.",
+    "kernelSu: null means the module/ksud pair for that target cannot be",
+    "reproduced by CI (hand-built, non-LTO, or symbol-pinned) and must be",
+    "preserved rather than rebuilt."
+  ],
+  "targets": {
+    "pa3q-S938BXXSBCZG3": {
+      "artifactDir": "artifacts/pa3q-S938BXXSBCZG3-v0266",
+      "expectedLabel": "pa3q-S938BXXSBCZG3-app-physical-p0-oracle",
+      "expectedExploitSize": 104128,
+      "requiredHelperStrings": [
+        "auto-late-load: starting ksud daemon",
+        "--ksu-info",
+        "--allow-shell"
+      ],
+      "forbiddenMarkers": [
+        "RMG_BOOT_V1",
+        "RMG_RACE_LIGHT_V1",
+        "RMG_RACE_V1",
+        "RMG_SCHED_V1",
+        "RMG_SYS_V1",
+        "RMG_PREP_V1",
+        "RMG_PREP_CHECKPOINT_V1",
+        "RMG_DIAG_V1",
+        "RMG_CZG3_GATE_V1"
+      ],
+      "kernelSu": {
+        "kernelRelease": "6.6.98-android15-8-pd6ff1cd-abogkiS938BXXSBCZG3-4k",
+        "ddkImage": "ghcr.io/ylarod/ddk-min:android15-6.6-20260828",
+        "moduleName": "android15-6.6_kernelsu-s25u-kdp-v3.3.0.ko",
+        "ksudName": "ksud-s25u-kdp-v3.3.0",
+        "updatesKernelSuReadme": true
+      }
+    },
+    "pa3q-S938BXXUCZZI4": {
+      "artifactDir": "artifacts/pa3q-S938BXXUCZZI4-v0300",
+      "expectedLabel": "pa3q-S938BXXUCZZI4-app-tracefs-phys-alias",
+      "expectedExploitSize": 104128,
+      "requiredHelperStrings": [
+        "auto-late-load: starting ksud daemon",
+        "--ksu-info",
+        "--allow-shell"
+      ],
+      "forbiddenMarkers": [
+        "RMG_BOOT_V1",
+        "RMG_RACE_LIGHT_V1",
+        "RMG_RACE_V1",
+        "RMG_SCHED_V1",
+        "RMG_SYS_V1",
+        "RMG_PREP_V1",
+        "RMG_PREP_CHECKPOINT_V1",
+        "RMG_DIAG_V1",
+        "RMG_CZG3_GATE_V1"
+      ],
+      "kernelSu": null
+    }
+  }
+}
