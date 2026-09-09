@@ -33,7 +33,7 @@ jobs:
           make clean
           make TARGET="$TARGET" ANDROID_NDK_HOME="$ANDROID_NDK_HOME" release
           make TARGET="$TARGET" ANDROID_NDK_HOME="$ANDROID_NDK_HOME" "build/$TARGET/cve-2026-43499-root"
-          test "$(stat -c%s "build/$TARGET/cve-2026-43499-app.release.so")" -eq 99144
+          test "$(stat -c%s "build/$TARGET/cve-2026-43499-app.release.so")" -eq 104128
           strings "build/$TARGET/cve-2026-43499-app.release.so" | grep -F "fops trigger did not fire; retrying"
           strings "build/$TARGET/cve-2026-43499-app.release.so" | grep -F "write landed; refusing further fops retries"
           if strings "build/$TARGET/cve-2026-43499-app.release.so" | grep -Fq "stack writer ran; refusing retry on this boot"; then
@@ -67,8 +67,8 @@ jobs:
 
           exploit_size, exploit_sha = meta(exploit)
           helper_size, helper_sha = meta(helper)
-          if exploit_size != 99144:
-              raise SystemExit(f'unexpected ZZI4 exploit size: {exploit_size}')
+          if exploit_size != 104128:
+              raise SystemExit(f'unexpected padded ZZI4 exploit size: {exploit_size}')
 
           manifest_path = root / 'support/targets-v3.json'
           manifest = json.loads(manifest_path.read_text())
@@ -102,20 +102,6 @@ jobs:
               out.append(f'{updates[rel]}  {rel}')
           sums_path.write_text('\n'.join(out) + '\n')
 
-          validator_path = root / '.github/scripts/validate_feed.py'
-          validator = validator_path.read_text()
-          old = (
-              '    assert exploit == expected_exploit, "ZZI4 exploit path is not canonical"\n'
-              '    assert exploit.stat().st_size == 104128'
-          )
-          new = (
-              '    assert exploit == expected_exploit, "ZZI4 exploit path is not canonical"\n'
-              '    assert exploit.stat().st_size == 99144'
-          )
-          if validator.count(old) != 1:
-              raise SystemExit('could not locate unique ZZI4 size assertion')
-          validator_path.write_text(validator.replace(old, new))
-
           print(f'ZZI4 exploit: {exploit_size} bytes {exploit_sha}')
           print(f'ZZI4 helper:  {helper_size} bytes {helper_sha}')
           PY
@@ -137,8 +123,7 @@ jobs:
           git config user.name "Root My Galaxy"
           git config user.email "root-my-galaxy@users.noreply.github.com"
           git rm .github/workflows/pr36-zzi4-build.yml
-          git add .github/scripts/validate_feed.py \
-                  support/targets-v3.json \
+          git add support/targets-v3.json \
                   artifacts/pa3q-S938BXXUCZZI4-v0300/cve-2026-43499-app.so \
                   artifacts/pa3q-S938BXXUCZZI4-v0300/cve-2026-43499-root \
                   artifacts/pa3q-S938BXXUCZZI4-v0300/cve-2026-43499-root.sha256 \
