@@ -1,14 +1,14 @@
 <p align="center">
-  <img src=".github/assets/root-my-galaxy-payloads-banner.svg" alt="Root My Galaxy Payloads" width="100%" />
+  <img src=".github/assets/root-my-galaxy-payloads-banner.svg" alt="Root My Galaxy Payloads Extended" width="100%" />
 </p>
 
 <p align="center">
-  <a href="https://github.com/igorcv88/Root-My-Galaxy-S938B/releases/latest"><img alt="App release" src="https://img.shields.io/github/v/release/igorcv88/Root-My-Galaxy-S938B?label=app" /></a>
+  <a href="https://github.com/igorcv88/Root-My-Galaxy-Extended/releases/latest"><img alt="App release" src="https://img.shields.io/github/v/release/igorcv88/Root-My-Galaxy-Extended?label=app" /></a>
   <img alt="Firmware" src="https://img.shields.io/badge/firmware-CZG3%20%2B%20ZZI4-59636e" />
   <img alt="Payload" src="https://img.shields.io/badge/payload-v0266%20%2F%20v0300-2f81f7" />
   <img alt="KernelSU" src="https://img.shields.io/badge/KernelSU-3.3.0-2f81f7" />
-  <a href="https://github.com/igorcv88/Root-My-Galaxy-Payloads-S938B/actions/workflows/update-payloads.yml"><img alt="Payload build" src="https://img.shields.io/github/actions/workflow/status/igorcv88/Root-My-Galaxy-Payloads-S938B/update-payloads.yml?branch=main&amp;label=payloads" /></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/igorcv88/Root-My-Galaxy-Payloads-S938B" /></a>
+  <a href="https://github.com/igorcv88/Root-My-Galaxy-Payloads-Extended/actions/workflows/update-payloads.yml"><img alt="Payload build" src="https://img.shields.io/github/actions/workflow/status/igorcv88/Root-My-Galaxy-Payloads-Extended/update-payloads.yml?branch=main&amp;label=payloads" /></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/igorcv88/Root-My-Galaxy-Payloads-Extended" /></a>
 </p>
 
 <p align="center">
@@ -16,11 +16,32 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/igorcv88/Root-My-Galaxy-S938B">Root My Galaxy app</a>
+  <a href="https://github.com/igorcv88/Root-My-Galaxy-Extended">Root My Galaxy app</a>
   ·
   <a href="https://github.com/BuSung-dev/Root-My-Galaxy-Payloads">Upstream payloads</a>
   ·
   <a href="support/targets-v3.json">Current v3 feed</a>
+</p>
+
+## Root My Galaxy Payloads Extended
+
+Based on [BuSung-dev's original payload repository](https://github.com/BuSung-dev/Root-My-Galaxy-Payloads), this fork maintains Galaxy S25 Ultra firmware profiles, payloads, a root helper and Samsung-specific KernelSU artifacts for the companion app. Later firmware contributions and integration fixes are credited below.
+
+| Component | Maintained here |
+| --- | --- |
+| Profiles | Separate firmware identities and matching artifacts |
+| KernelSU | Samsung-specific 3.3.0 integration and firmware-specific fixes |
+| Metadata | Artifact sizes, SHA-256 hashes and app-facing target policy |
+| Publication | Consistency checks and preserved historical artifacts |
+
+The Android interface, settings, Auto Root, Shizuku startup, history and recovery controls belong to the companion app. “Extended” describes this fork's additions, not compatibility with every Galaxy device.
+
+<p align="center">
+  <a href="#maintained-s938b-targets">Compatibility</a> ·
+  <a href="#current-v3-feed">Artifacts</a> ·
+  <a href="#target-agnostic-publication-workflow">Publication</a> ·
+  <a href="#technical-documentation">Documentation</a> ·
+  <a href="#credits-and-provenance">Credits</a>
 </p>
 
 > [!WARNING]
