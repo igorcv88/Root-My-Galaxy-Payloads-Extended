@@ -1,0 +1,72 @@
+name: Restore ZZI4 bounded fops retry
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/restore-zzi4-bounded-fops-retry.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Restore bounded ZZI4 fops retry policy
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/targets/pa3q-S938BXXUCZZI4/target.h')
+          text = p.read_text()
+          old = '''#define APP_TRACEFS_PHYS_ALIAS_DATA 1
+#ifndef DEFAULT_EXPLOIT_ATTEMPTS
+#define DEFAULT_EXPLOIT_ATTEMPTS 4
+#endif
+'''
+          new = '''#define APP_TRACEFS_PHYS_ALIAS_DATA 1
+/* A missed pselect/FOPS window is state-neutral. Retry only while no write
+ * has landed; preload.c stops immediately after a landed write and keeps
+ * the route-delay index shared across supervisor children. */
+#define APP_FOPS_RETRY_BUDGET 8
+'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exact target policy block once, found {text.count(old)}')
+          p.write_text(text.replace(old, new, 1))
+          PY
+
+      - name: Verify scope
+        run: |
+          set -euo pipefail
+          grep -q '^#define APP_FOPS_RETRY_BUDGET 8$' src/targets/pa3q-S938BXXUCZZI4/target.h
+          ! grep -q '^#define DEFAULT_EXPLOIT_ATTEMPTS 4$' src/targets/pa3q-S938BXXUCZZI4/target.h
+          git diff --check
+          git diff -- src/targets/pa3q-S938BXXUCZZI4/target.h
+
+      - name: Host-test exact target
+        run: make TARGET=pa3q-S938BXXUCZZI4 host-test
+
+      - name: Commit validated policy restoration
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/targets/pa3q-S938BXXUCZZI4/target.h
+          git commit -m 'ZZI4: restore bounded retry for missed fops window'
+          git push
+
+      - name: Rebuild and publish ZZI4 exploit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run update-payloads.yml \
+            --ref main \
+            -f target=pa3q-S938BXXUCZZI4 \
+            -f atualizar=Exploit
