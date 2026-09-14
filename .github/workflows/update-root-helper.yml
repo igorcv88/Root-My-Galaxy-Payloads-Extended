@@ -1,0 +1,219 @@
+name: Atualizar Root Helper
+
+# Build the shared root helper independently from the exploit payload.
+# Publication is opt-in so a helper can be compiled and inspected without
+# changing the support feed or invalidating an already-installed APK.
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publicar o helper e atualizar o feed?"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+env:
+  CANONICAL_TARGET: pa3q-S938BXXUCZZI4
+
+jobs:
+  helper:
+    name: Gerar root helper isoladamente
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fixar revisão de origem
+        id: source
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Preparar Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r29
+
+      - name: Gerar somente o root helper
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          set -euo pipefail
+          make TARGET="$CANONICAL_TARGET" ANDROID_NDK_HOME="$ANDROID_NDK_HOME" \
+            "build/$CANONICAL_TARGET/cve-2026-43499-root"
+          helper="build/$CANONICAL_TARGET/cve-2026-43499-root"
+          test -s "$helper"
+          strings "$helper" | grep -F -- '--ksu-info' >/dev/null
+          strings "$helper" | grep -F -- '--allow-shell' >/dev/null
+          strings "$helper" | grep -F 'auto-late-load: starting ksud daemon' >/dev/null
+          sha256sum "$helper"
+          stat -c 'root-helper size=%s' "$helper"
+
+      - name: Guardar helper para inspeção
+        uses: actions/upload-artifact@v4
+        with:
+          name: root-helper-${{ steps.source.outputs.sha }}
+          path: build/${{ env.CANONICAL_TARGET }}/cve-2026-43499-root
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Confirmar revisão antes da publicação
+        if: inputs.publish
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          current="$(git rev-parse origin/main)"
+          if [ "$current" != "$SOURCE_SHA" ]; then
+            echo "::error::main avançou de $SOURCE_SHA para $current durante o build; abortando publicação. Reexecute o workflow." >&2
+            exit 1
+          fi
+
+      - name: Atualizar somente root helper e metadados
+        if: inputs.publish
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import pathlib
+          import shutil
+
+          root = pathlib.Path.cwd()
+          canonical = "pa3q-S938BXXUCZZI4"
+          built = root / "build" / canonical / "cve-2026-43499-root"
+          if not built.is_file() or built.stat().st_size == 0:
+              raise SystemExit(f"missing built root helper: {built}")
+
+          helper_bytes = built.read_bytes()
+          helper_size = len(helper_bytes)
+          helper_sha = hashlib.sha256(helper_bytes).hexdigest()
+
+          descriptor = json.loads(
+              (root / ".github/build-targets.json").read_text(encoding="utf-8")
+          )["targets"]
+          manifest_path = root / "support/targets-v3.json"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          feed = {item["payloadId"]: item for item in manifest.get("payloads", [])}
+
+          targets = sorted(set(descriptor) & set(feed))
+          if not targets:
+              raise SystemExit("no published build targets found")
+
+          # Root My Galaxy bundles one helper in the APK. Refuse publication if
+          # the feed has already diverged into target-specific helper contracts.
+          current_hashes = {
+              str(feed[target].get("rootHelper", {}).get("sha256", ""))
+              for target in targets
+          }
+          if "" in current_hashes or len(current_hashes) != 1:
+              raise SystemExit(
+                  "published targets do not share one root-helper contract; "
+                  "refusing a shared-helper publication"
+              )
+
+          for target in targets:
+              artifact_dir = root / descriptor[target]["artifactDir"]
+              artifact_dir.mkdir(parents=True, exist_ok=True)
+              destination = artifact_dir / "cve-2026-43499-root"
+              shutil.copy2(built, destination)
+
+              feed[target]["rootHelper"]["size"] = helper_size
+              feed[target]["rootHelper"]["sha256"] = helper_sha
+
+              (artifact_dir / "cve-2026-43499-root.sha256").write_text(
+                  f"{helper_sha}  cve-2026-43499-root\n",
+                  encoding="utf-8",
+              )
+
+              sums_path = artifact_dir / "SHA256SUMS"
+              if sums_path.is_file():
+                  rel = destination.relative_to(root).as_posix()
+                  lines = sums_path.read_text(encoding="utf-8").splitlines()
+                  output = []
+                  replaced = False
+                  for line in lines:
+                      parts = line.split(maxsplit=1)
+                      if len(parts) == 2 and parts[1].strip() == rel:
+                          output.append(f"{helper_sha}  {rel}")
+                          replaced = True
+                      else:
+                          output.append(line)
+                  if not replaced:
+                      output.append(f"{helper_sha}  {rel}")
+                  sums_path.write_text("\n".join(output) + "\n", encoding="utf-8")
+
+          temporary = manifest_path.with_suffix(".json.tmp")
+          temporary.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+          temporary.replace(manifest_path)
+          print(f"shared root helper: size={helper_size} sha256={helper_sha}")
+          print("targets: " + ", ".join(targets))
+          PY
+
+      - name: Validar publicação isolada
+        if: inputs.publish
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/validate_feed.py
+          git diff --check
+
+          # The helper-only path must never touch exploit or KernelSU bytes.
+          if ! git diff --quiet -- 'artifacts/*/cve-2026-43499-app.so' kernelsu/; then
+            echo "::error::helper-only publication changed exploit or KernelSU artifacts" >&2
+            git diff --name-only >&2
+            exit 1
+          fi
+
+          bad=0
+          while IFS= read -r path; do
+            case "$path" in
+              support/targets-v3.json|artifacts/*/cve-2026-43499-root|artifacts/*/cve-2026-43499-root.sha256|artifacts/*/SHA256SUMS)
+                ;;
+              *)
+                echo "::error::unexpected helper-only change: $path" >&2
+                bad=1
+                ;;
+            esac
+          done < <(git diff --name-only)
+          test "$bad" -eq 0
+
+      - name: Publicar helper no feed
+        if: inputs.publish
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git config user.name "Root My Galaxy"
+          git config user.email "root-my-galaxy@users.noreply.github.com"
+
+          git fetch origin main
+          current="$(git rev-parse origin/main)"
+          if [ "$current" != "$SOURCE_SHA" ]; then
+            echo "::error::main avançou para $current antes da publicação; reexecute o workflow." >&2
+            exit 1
+          fi
+
+          git add support/targets-v3.json artifacts/
+          if git diff --cached --quiet; then
+            echo "Root helper já corresponde ao feed; nada para publicar."
+            exit 0
+          fi
+
+          # Repeat the isolation guard on the exact staged commit.
+          if ! git diff --cached --quiet -- 'artifacts/*/cve-2026-43499-app.so' kernelsu/; then
+            echo "::error::staged helper-only commit contains exploit or KernelSU changes" >&2
+            exit 1
+          fi
+
+          git commit -m "Update shared root helper"
+          python3 .github/scripts/validate_feed.py
+          git push origin HEAD:main
