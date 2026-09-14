@@ -86,10 +86,9 @@
       },
       "routePolicy": {
         "slideRoute": "auto",
-        "attempts": 24,
-        "attemptTimeoutSec": 120,
-        "p0AttemptTimeoutSec": 45,
-        "p0OffsetCache": true,
+        "attemptTimeoutSec": 600,
+        "p0AttemptTimeoutSec": 90,
+        "p0OffsetCache": false,
         "prefersShellTransport": true
       }
     }
