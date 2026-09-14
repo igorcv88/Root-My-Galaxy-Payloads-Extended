@@ -19,9 +19,10 @@
  * from tracefs: canonical direct-map writes never land on this build
  * (window=0 across boots) while phys-alias writes succeed. */
 #define APP_TRACEFS_PHYS_ALIAS_DATA 1
-#ifndef DEFAULT_EXPLOIT_ATTEMPTS
-#define DEFAULT_EXPLOIT_ATTEMPTS 4
-#endif
+/* A missed pselect/FOPS window is state-neutral. Retry only while no write
+ * has landed; preload.c stops immediately after a landed write and keeps
+ * the route-delay index shared across supervisor children. */
+#define APP_FOPS_RETRY_BUDGET 8
 #else
 #define BUILD_VARIANT_LABEL "pa3q-S938BXXUCZZI4-root-umh"
 #endif
