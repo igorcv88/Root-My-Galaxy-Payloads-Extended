@@ -21,32 +21,13 @@ jobs:
           fetch-depth: 0
 
       - name: Restore bounded ZZI4 fops retry policy
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('src/targets/pa3q-S938BXXUCZZI4/target.h')
-          text = p.read_text()
-          old = '''#define APP_TRACEFS_PHYS_ALIAS_DATA 1
-#ifndef DEFAULT_EXPLOIT_ATTEMPTS
-#define DEFAULT_EXPLOIT_ATTEMPTS 4
-#endif
-'''
-          new = '''#define APP_TRACEFS_PHYS_ALIAS_DATA 1
-/* A missed pselect/FOPS window is state-neutral. Retry only while no write
- * has landed; preload.c stops immediately after a landed write and keeps
- * the route-delay index shared across supervisor children. */
-#define APP_FOPS_RETRY_BUDGET 8
-'''
-          if text.count(old) != 1:
-              raise SystemExit(f'expected exact target policy block once, found {text.count(old)}')
-          p.write_text(text.replace(old, new, 1))
-          PY
+        run: python3 tools/restore-zzi4-bounded-retry.py
 
       - name: Verify scope
         run: |
           set -euo pipefail
           grep -q '^#define APP_FOPS_RETRY_BUDGET 8$' src/targets/pa3q-S938BXXUCZZI4/target.h
-          ! grep -q '^#define DEFAULT_EXPLOIT_ATTEMPTS 4$' src/targets/pa3q-S938BXXUCZZI4/target.h
+          if grep -q '^#define DEFAULT_EXPLOIT_ATTEMPTS 4$' src/targets/pa3q-S938BXXUCZZI4/target.h; then exit 1; fi
           git diff --check
           git diff -- src/targets/pa3q-S938BXXUCZZI4/target.h
 
@@ -66,7 +47,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh workflow run update-payloads.yml \
-            --ref main \
-            -f target=pa3q-S938BXXUCZZI4 \
-            -f atualizar=Exploit
+          gh workflow run update-payloads.yml --ref main -f target=pa3q-S938BXXUCZZI4 -f atualizar=Exploit
