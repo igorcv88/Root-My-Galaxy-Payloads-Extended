@@ -31,11 +31,11 @@ This repository maintains the firmware-specific files consumed by [Root My Galax
 | --- | --- | --- | --- | --- |
 | Galaxy S25 Ultra SM-S938B | `S938BXXSBCZG3` | 16 | 6.6.98 | Supported |
 | Galaxy S25 Ultra SM-S938B | `S938BXXUCZZI4` | 17 / One UI 9 beta | 6.6.127 | Hardware validated |
-| Galaxy S25 SM-S931B | `S931BXXUCZZI4` | 17 / One UI 9 beta | 6.6.127 | Exact-match profile available |
+| Galaxy S25 SM-S931B | `S931BXXUCZZI4` | 17 / One UI 9 beta | 6.6.127 | Exact-match profile available |\n| Galaxy S25+ SM-S936B | compatible 6.6.98 builds | 16 | 6.6.98 | Advanced support (unvalidated) |
 
 The feed also retains a legacy generic Galaxy S25/S25+ kernel-6.6.98 entry. Current exact identities are published in [support/targets-v3.json](support/targets-v3.json).
 
-SM-S936B ZZI4 will receive its own exact profile after the real device build, fingerprint, kernel and ABI/page-size identity are confirmed.
+SM-S936B currently has **Advanced support (unvalidated)** through the generic S25/S25+ kernel-6.6.98 profile. Automatic selection still requires an exact profile. ZZI4 will receive its own exact match after the real device build, fingerprint, kernel and ABI/page-size identity are confirmed.
 
 ## Feed and artifact verification
 
