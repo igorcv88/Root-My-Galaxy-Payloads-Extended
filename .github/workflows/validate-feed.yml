@@ -1,0 +1,35 @@
+name: Validate Production Feed
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - support/**
+      - .github/scripts/**
+      - .github/build-targets.json
+      - .github/workflows/validate-feed.yml
+  pull_request:
+    paths:
+      - support/**
+      - .github/scripts/**
+      - .github/build-targets.json
+      - .github/workflows/validate-feed.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate payload feed
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate manifests and artifacts
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/validate_feed.py
+          git diff --check
