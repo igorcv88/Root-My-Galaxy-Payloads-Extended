@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Copy built artifacts into the repository and update the v3 feed.
 
-Only the targets named in TARGETS are touched. Every other feed entry - and
-every other artifact directory - is left byte-identical, so a single-target
-run can never disturb a validated target.
+Only the targets named in TARGETS are touched. Every other feed entry and
+artifact directory stays unchanged, so rebuilding one target cannot rewrite a
+separate validated profile.
 """
 from __future__ import annotations
 
@@ -15,10 +15,11 @@ import re
 import shutil
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-PREFIX = (
-    "https://raw.githubusercontent.com/igorcv88/"
-    "Root-My-Galaxy-Payloads-S938B/main/"
+REPOSITORY = os.environ.get(
+    "RMG_PAYLOAD_REPOSITORY",
+    "igorcv88/Root-My-Galaxy-Payloads-Extended",
 )
+PREFIX = f"https://raw.githubusercontent.com/{REPOSITORY}/main/"
 
 
 def metadata(path: pathlib.Path) -> tuple[int, str]:
@@ -30,12 +31,6 @@ def refresh_checksum_file(
     artifact_dir: pathlib.Path,
     updates: dict[pathlib.Path, str],
 ) -> bool:
-    """Refresh changed artifact digests in a target aggregate SHA256SUMS.
-
-    Some legacy targets do not carry an aggregate checksum file. Those are
-    deliberately left alone. For targets that do, every changed artifact must
-    be reflected in the same commit as the rebuilt bytes and feed metadata.
-    """
     sums_path = artifact_dir / "SHA256SUMS"
     if not sums_path.is_file() or not updates:
         return False
@@ -161,8 +156,6 @@ def main() -> None:
             changed.append(entry["artifactDir"])
             print(f"{target_id}: refreshed {artifact_dir.relative_to(ROOT) / 'SHA256SUMS'}")
 
-    # Written once, after every target succeeded, so a mid-run failure never
-    # leaves the feed describing artifacts that were not published.
     temporary = manifest_path.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     temporary.replace(manifest_path)
