@@ -1,0 +1,33 @@
+name: Audit S25 series existing artifacts
+
+on:
+  push:
+    branches:
+      - support-s25b-hash
+    paths:
+      - .github/workflows/audit-s25b-existing-artifacts.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Hash and inspect existing S25 series artifacts
+        run: |
+          set -euo pipefail
+          exploit='artifacts/pa3q-S938NKSUACZF1/cve-2026-43499-app.so'
+          ksud='kernelsu/ksud-s25u-kdp'
+          module='kernelsu/android15-6.6_kernelsu-s25u-kdp.ko'
+          test -s "$exploit"
+          test -s "$ksud"
+          test -s "$module"
+          sha256sum "$exploit" "$ksud" "$module"
+          stat -c '%n size=%s' "$exploit" "$ksud" "$module"
+          printf '%s\n' '--- ksud capability strings ---'
+          strings "$ksud" | grep -E -m 20 'late-load|KernelSU|ksu' || true
