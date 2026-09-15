@@ -19,6 +19,10 @@ V0265_EXPLOIT = pathlib.Path(
 V0266_DIR = pathlib.Path("artifacts/pa3q-S938BXXSBCZG3-v0266")
 ZZI4_DIR = pathlib.Path("artifacts/pa3q-S938BXXUCZZI4-v0300")
 ZZI4_KSUD = pathlib.Path("kernelsu/ksud-pa3q-S938BXXUCZZI4-kdp-v3.3.0")
+S931B_ZZI4_EXPLOIT = pathlib.Path(
+    "artifacts/pa1q-S931BXXUCZZI4/cve-2026-43499-app.so"
+)
+S931B_ZZI4_KSUD = pathlib.Path("kernelsu/ksud-pa1q-S931BXXUCZZI4-kdp")
 GENERIC_S25_EXPLOIT = pathlib.Path(
     "artifacts/pa3q-S938NKSUACZF1/cve-2026-43499-app.so"
 )
@@ -29,11 +33,20 @@ GENERIC_S25_EXPLOIT_SHA256 = (
 GENERIC_S25_KSUD_SHA256 = (
     "fa3edcc7d168637394877b30cb1f909d762dda788ec14051f4ae79edd6562d63"
 )
+S931B_ZZI4_EXPLOIT_SHA256 = (
+    "2f9799912ec6c297d9190bc2b82ff417ff451854a08e9524fa549743470284af"
+)
+S931B_ZZI4_KSUD_SHA256 = (
+    "1e1cb6b861d0d4951b7374c12404eee1fb4c02a77240e0500ca571a302396374"
+)
 LEGACY_EXPLOIT_SHA256 = (
     "ba0894d1214e3c46305d8acb0ab065eb110833b4b9973c9250aca5bfcb98c214"
 )
 V0265_EXPLOIT_SHA256 = (
     "1719e9362cd19e58521cb785fcaa40c4613ca854d0c3c9fb8320edf8e9046303"
+)
+STABLE_ROOT_HELPER_SHA256 = (
+    "788611baf566f0ca9008d28fa7d1b1edb4657efc56e4b5ac24b319ae12519dd4"
 )
 EXPECTED_CZG3_IDENTITY = {
     "manufacturer": "samsung",
@@ -62,6 +75,22 @@ EXPECTED_ZZI4_IDENTITY = {
     ),
     "kernelRelease": "6.6.127-android15-8-p33f4ffe-abogkiS938BXXUCZZI4-4k",
     "kernelVersionInfo": "#1 SMP PREEMPT Wed Sep  2 08:13:43 UTC 2026",
+    "machine": "aarch64",
+    "sdk": 37,
+    "abi": "arm64-v8a",
+    "pageSize": 4096,
+}
+EXPECTED_S931B_ZZI4_IDENTITY = {
+    "manufacturer": "samsung",
+    "model": "SM-S931B",
+    "device": "pa1q",
+    "buildDisplay": "CP2A.260605.016.S931BXXUCZZI4",
+    "buildFingerprint": (
+        "samsung/pa1qxeea/pa1q:17/CP2A.260605.016/"
+        "S931BXXUCZZI4_OXMCZZI4:user/release-keys"
+    ),
+    "kernelRelease": "6.6.127-android15-8-p33f4ffe-abogkiS931BXXUCZZI4-4k",
+    "kernelVersionInfo": "#1 SMP PREEMPT Wed Sep  2 08:11:10 UTC 2026",
     "machine": "aarch64",
     "sdk": 37,
     "abi": "arm64-v8a",
@@ -148,13 +177,47 @@ def validate_zzi4(target: dict) -> None:
     assert (ROOT / "src/targets/pa3q-S938BXXUCZZI4/p0_fingerprint.h").is_file()
 
 
+def validate_s931b_zzi4(target: dict) -> None:
+    assert target["payloadId"] == "pa1q-S931BXXUCZZI4"
+    assert target["models"] == ["SM-S931B"]
+    assert target["kernelVersions"] == ["6.6.127"]
+    assert target["exactMatch"] == EXPECTED_S931B_ZZI4_IDENTITY, (
+        "exact S931B ZZI4 identity drifted"
+    )
+
+    exploit = validate_v3_artifact(target["exploit"], "S931B ZZI4 exploit")
+    assert exploit == ROOT / S931B_ZZI4_EXPLOIT
+    assert exploit.stat().st_size == 104128
+    assert target["exploit"]["sha256"] == S931B_ZZI4_EXPLOIT_SHA256
+
+    ksud = validate_v3_artifact(target["kernelsu"], "S931B ZZI4 KernelSU")
+    assert ksud == ROOT / S931B_ZZI4_KSUD
+    assert ksud.stat().st_size == 6419120
+    assert target["kernelsu"]["sha256"] == S931B_ZZI4_KSUD_SHA256
+    assert target["kernelsu"].get("kmi") == "android15-6.6"
+
+    helper = validate_v3_artifact(target["rootHelper"], "S931B stable rootHelper")
+    assert helper == ROOT / ZZI4_DIR / "cve-2026-43499-root"
+    assert helper.stat().st_size == 31496
+    assert target["rootHelper"]["sha256"] == STABLE_ROOT_HELPER_SHA256
+
+    assert target.get("routePolicy") == {
+        "slideRoute": "default",
+        "attempts": 24,
+        "attemptTimeoutSec": 120,
+        "p0AttemptTimeoutSec": 45,
+        "p0OffsetCache": True,
+        "prefersShellTransport": True,
+    }, "S931B ZZI4 route policy drifted"
+
+
 def validate_generic_s25_b(target: dict) -> None:
     assert target["payloadId"] == "galaxy-s25-series-2026-06-07"
     assert target["models"] == ["SM-S931B", "SM-S936B"]
     assert target["kernelVersions"] == ["6.6.98"]
     assert "exactMatch" not in target, (
-        "generic S931B/S936B profile must remain manual/Advanced-only "
-        "until exact firmware identity is supplied"
+        "generic S931B/S936B 6.6.98 profile must remain manual/Advanced-only; "
+        "exact firmware identities belong in separate profiles"
     )
     assert "rootHelper" not in target, (
         "generic S931B/S936B profile must not impose a target-specific "
@@ -216,13 +279,15 @@ def main() -> None:
     v3 = json.loads((ROOT / "support/targets-v3.json").read_text(encoding="utf-8"))
     assert v3.get("schemaVersion") == 3
     payloads = v3.get("payloads")
-    assert isinstance(payloads, list) and len(payloads) == 3, (
-        "v3 feed must contain exact CZG3/ZZI4 plus the manual S931B/S936B profile"
+    assert isinstance(payloads, list) and len(payloads) == 4, (
+        "v3 feed must contain exact S938B CZG3/ZZI4, exact S931B ZZI4, "
+        "and the manual S931B/S936B 6.6.98 profile"
     )
     by_id = {item["payloadId"]: item for item in payloads}
     assert set(by_id) == {
         "pa3q-S938BXXSBCZG3",
         "pa3q-S938BXXUCZZI4",
+        "pa1q-S931BXXUCZZI4",
         "galaxy-s25-series-2026-06-07",
     }
 
@@ -248,10 +313,12 @@ def main() -> None:
     assert (ROOT / "src/targets/pa3q-S938BXXSBCZG3/p0_fingerprint.h").is_file()
 
     validate_zzi4(by_id["pa3q-S938BXXUCZZI4"])
+    validate_s931b_zzi4(by_id["pa1q-S931BXXUCZZI4"])
     validate_generic_s25_b(by_id["galaxy-s25-series-2026-06-07"])
     print(
         "Payload feed is valid "
-        "(exact CZG3/ZZI4 + manual S931B/S936B 6.6.98 profile)"
+        "(exact S938B CZG3/ZZI4 + exact S931B ZZI4 + "
+        "manual S931B/S936B 6.6.98 profile)"
     )
 
 

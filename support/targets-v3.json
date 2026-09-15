@@ -94,6 +94,53 @@
       }
     },
     {
+      "payloadId": "pa1q-S931BXXUCZZI4",
+      "displayName": "Galaxy S25 SM-S931B | S931BXXUCZZI4",
+      "models": [
+        "SM-S931B"
+      ],
+      "kernelVersions": [
+        "6.6.127"
+      ],
+      "exactMatch": {
+        "manufacturer": "samsung",
+        "model": "SM-S931B",
+        "device": "pa1q",
+        "buildDisplay": "CP2A.260605.016.S931BXXUCZZI4",
+        "buildFingerprint": "samsung/pa1qxeea/pa1q:17/CP2A.260605.016/S931BXXUCZZI4_OXMCZZI4:user/release-keys",
+        "kernelRelease": "6.6.127-android15-8-p33f4ffe-abogkiS931BXXUCZZI4-4k",
+        "kernelVersionInfo": "#1 SMP PREEMPT Wed Sep  2 08:11:10 UTC 2026",
+        "machine": "aarch64",
+        "sdk": 37,
+        "abi": "arm64-v8a",
+        "pageSize": 4096
+      },
+      "exploit": {
+        "url": "https://raw.githubusercontent.com/igorcv88/Root-My-Galaxy-Payloads-S938B/main/artifacts/pa1q-S931BXXUCZZI4/cve-2026-43499-app.so",
+        "size": 104128,
+        "sha256": "2f9799912ec6c297d9190bc2b82ff417ff451854a08e9524fa549743470284af"
+      },
+      "kernelsu": {
+        "url": "https://raw.githubusercontent.com/igorcv88/Root-My-Galaxy-Payloads-S938B/main/kernelsu/ksud-pa1q-S931BXXUCZZI4-kdp",
+        "size": 6419120,
+        "sha256": "1e1cb6b861d0d4951b7374c12404eee1fb4c02a77240e0500ca571a302396374",
+        "kmi": "android15-6.6"
+      },
+      "rootHelper": {
+        "url": "https://raw.githubusercontent.com/igorcv88/Root-My-Galaxy-Payloads-S938B/main/artifacts/pa3q-S938BXXUCZZI4-v0300/cve-2026-43499-root",
+        "size": 31496,
+        "sha256": "788611baf566f0ca9008d28fa7d1b1edb4657efc56e4b5ac24b319ae12519dd4"
+      },
+      "routePolicy": {
+        "slideRoute": "default",
+        "attempts": 24,
+        "attemptTimeoutSec": 120,
+        "p0AttemptTimeoutSec": 45,
+        "p0OffsetCache": true,
+        "prefersShellTransport": true
+      }
+    },
+    {
       "payloadId": "galaxy-s25-series-2026-06-07",
       "displayName": "Galaxy S25 / S25+ SM-S931B, SM-S936B | Kernel 6.6.98",
       "models": [
