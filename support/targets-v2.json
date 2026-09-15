@@ -15,11 +15,11 @@
       "abi": "arm64-v8a",
       "pageSize": 4096,
       "exploit": {
-        "url": "https://raw.githubusercontent.com/igorcv88/Root-My-Galaxy-Payloads-S938B/main/artifacts/pa3q-S938BXXSBCZG3/cve-2026-43499-app.so",
+        "url": "https://raw.githubusercontent.com/igorcv88/Root-My-Galaxy-Payloads-Extended/main/artifacts/pa3q-S938BXXSBCZG3/cve-2026-43499-app.so",
         "size": 104128
       },
       "kernelsu": {
-        "url": "https://raw.githubusercontent.com/igorcv88/Root-My-Galaxy-Payloads-S938B/main/kernelsu/ksud-s25u-kdp",
+        "url": "https://raw.githubusercontent.com/igorcv88/Root-My-Galaxy-Payloads-Extended/main/kernelsu/ksud-s25u-kdp",
         "size": 6407096,
         "kmi": "android15-6.6",
         "managerPackage": "me.weishu.kernelsu"
