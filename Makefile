@@ -35,7 +35,7 @@ APP_RELEASE := $(OUTDIR)/cve-2026-43499-app.release.so
 APP_STABLE := $(OUTDIR)/cve-2026-43499-app.stable.so
 APP_RELEASE_SIZE := 104128
 ROOT_HELPER := $(OUTDIR)/cve-2026-43499-root
-ROOT_HELPER_SRCS := src/su_daemon_quiet_runner.c src/ksu_bootstrap.c
+ROOT_HELPER_SRCS := src/su_daemon.c src/ksu_bootstrap.c
 TARGET_CFLAGS :=
 APP_RELEASE_OPT := -Oz
 APP_RELEASE_LINK_FLAGS := -Wl,--gc-sections -Wl,--icf=all -s
