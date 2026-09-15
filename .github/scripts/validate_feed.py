@@ -19,6 +19,16 @@ V0265_EXPLOIT = pathlib.Path(
 V0266_DIR = pathlib.Path("artifacts/pa3q-S938BXXSBCZG3-v0266")
 ZZI4_DIR = pathlib.Path("artifacts/pa3q-S938BXXUCZZI4-v0300")
 ZZI4_KSUD = pathlib.Path("kernelsu/ksud-pa3q-S938BXXUCZZI4-kdp-v3.3.0")
+GENERIC_S25_EXPLOIT = pathlib.Path(
+    "artifacts/pa3q-S938NKSUACZF1/cve-2026-43499-app.so"
+)
+GENERIC_S25_KSUD = pathlib.Path("kernelsu/ksud-s25u-kdp")
+GENERIC_S25_EXPLOIT_SHA256 = (
+    "6311e5ae1a381fd96b8a989e82525521ed9b00cff4e0d3020d3904eb5716587c"
+)
+GENERIC_S25_KSUD_SHA256 = (
+    "fa3edcc7d168637394877b30cb1f909d762dda788ec14051f4ae79edd6562d63"
+)
 LEGACY_EXPLOIT_SHA256 = (
     "ba0894d1214e3c46305d8acb0ab065eb110833b4b9973c9250aca5bfcb98c214"
 )
@@ -138,6 +148,44 @@ def validate_zzi4(target: dict) -> None:
     assert (ROOT / "src/targets/pa3q-S938BXXUCZZI4/p0_fingerprint.h").is_file()
 
 
+def validate_generic_s25_b(target: dict) -> None:
+    assert target["payloadId"] == "galaxy-s25-series-2026-06-07"
+    assert target["models"] == ["SM-S931B", "SM-S936B"]
+    assert target["kernelVersions"] == ["6.6.98"]
+    assert "exactMatch" not in target, (
+        "generic S931B/S936B profile must remain manual/Advanced-only "
+        "until exact firmware identity is supplied"
+    )
+    assert "rootHelper" not in target, (
+        "generic S931B/S936B profile must not impose a target-specific "
+        "root-helper contract"
+    )
+
+    exploit = validate_v3_artifact(target["exploit"], "generic S25 B-series exploit")
+    assert exploit == ROOT / GENERIC_S25_EXPLOIT
+    assert exploit.stat().st_size == 104128
+    assert target["exploit"]["sha256"] == GENERIC_S25_EXPLOIT_SHA256
+
+    ksud = validate_v3_artifact(target["kernelsu"], "generic S25 B-series KernelSU")
+    assert ksud == ROOT / GENERIC_S25_KSUD
+    assert ksud.stat().st_size == 6407096
+    assert target["kernelsu"]["sha256"] == GENERIC_S25_KSUD_SHA256
+    assert target["kernelsu"].get("kmi") == "android15-6.6"
+
+    policy = target.get("routePolicy")
+    assert policy == {
+        "slideRoute": "default",
+        "attempts": 24,
+        "attemptTimeoutSec": 120,
+        "p0AttemptTimeoutSec": 45,
+        "p0OffsetCache": True,
+        "prefersShellTransport": False,
+    }, "generic S25 B-series route policy drifted"
+
+    assert (ROOT / "src/targets/pa3q-S938NKSUACZF1/target.h").is_file()
+    assert (ROOT / "src/targets/pa3q-S938NKSUACZF1/p0_fingerprint.h").is_file()
+
+
 def main() -> None:
     v2 = json.loads((ROOT / "support/targets-v2.json").read_text(encoding="utf-8"))
     assert v2.get("schemaVersion") == 2
@@ -168,11 +216,15 @@ def main() -> None:
     v3 = json.loads((ROOT / "support/targets-v3.json").read_text(encoding="utf-8"))
     assert v3.get("schemaVersion") == 3
     payloads = v3.get("payloads")
-    assert isinstance(payloads, list) and len(payloads) == 2, (
-        "v3 feed must contain exact CZG3 and ZZI4 S938B targets"
+    assert isinstance(payloads, list) and len(payloads) == 3, (
+        "v3 feed must contain exact CZG3/ZZI4 plus the manual S931B/S936B profile"
     )
     by_id = {item["payloadId"]: item for item in payloads}
-    assert set(by_id) == {"pa3q-S938BXXSBCZG3", "pa3q-S938BXXUCZZI4"}
+    assert set(by_id) == {
+        "pa3q-S938BXXSBCZG3",
+        "pa3q-S938BXXUCZZI4",
+        "galaxy-s25-series-2026-06-07",
+    }
 
     target = by_id["pa3q-S938BXXSBCZG3"]
     assert target["models"] == ["SM-S938B"]
@@ -196,7 +248,11 @@ def main() -> None:
     assert (ROOT / "src/targets/pa3q-S938BXXSBCZG3/p0_fingerprint.h").is_file()
 
     validate_zzi4(by_id["pa3q-S938BXXUCZZI4"])
-    print("Payload feed is valid (immutable CZG3 + exact S938B ZZI4 target)")
+    validate_generic_s25_b(by_id["galaxy-s25-series-2026-06-07"])
+    print(
+        "Payload feed is valid "
+        "(exact CZG3/ZZI4 + manual S931B/S936B 6.6.98 profile)"
+    )
 
 
 if __name__ == "__main__":
