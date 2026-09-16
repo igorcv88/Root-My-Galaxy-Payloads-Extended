@@ -31,8 +31,8 @@
       },
       "rootHelper": {
         "url": "https://raw.githubusercontent.com/igorcv88/Root-My-Galaxy-Payloads-Extended/main/artifacts/pa3q-S938BXXSBCZG3-v0266/cve-2026-43499-root",
-        "size": 31496,
-        "sha256": "788611baf566f0ca9008d28fa7d1b1edb4657efc56e4b5ac24b319ae12519dd4"
+        "size": 32888,
+        "sha256": "4dd29619caae2b08aa491d7fcfc2e5d0d1ea11d0b6b9d1673d49f7580a40858f"
       },
       "routePolicy": {
         "slideRoute": "default",
@@ -73,8 +73,8 @@
       },
       "rootHelper": {
         "url": "https://raw.githubusercontent.com/igorcv88/Root-My-Galaxy-Payloads-Extended/main/artifacts/pa3q-S938BXXUCZZI4-v0300/cve-2026-43499-root",
-        "size": 31496,
-        "sha256": "788611baf566f0ca9008d28fa7d1b1edb4657efc56e4b5ac24b319ae12519dd4"
+        "size": 32888,
+        "sha256": "4dd29619caae2b08aa491d7fcfc2e5d0d1ea11d0b6b9d1673d49f7580a40858f"
       },
       "routePolicy": {
         "slideRoute": "auto",
@@ -116,8 +116,8 @@
       },
       "rootHelper": {
         "url": "https://raw.githubusercontent.com/igorcv88/Root-My-Galaxy-Payloads-Extended/main/artifacts/pa3q-S938BXXUCZZI4-v0300/cve-2026-43499-root",
-        "size": 31496,
-        "sha256": "788611baf566f0ca9008d28fa7d1b1edb4657efc56e4b5ac24b319ae12519dd4"
+        "size": 32888,
+        "sha256": "4dd29619caae2b08aa491d7fcfc2e5d0d1ea11d0b6b9d1673d49f7580a40858f"
       },
       "routePolicy": {
         "slideRoute": "default",
