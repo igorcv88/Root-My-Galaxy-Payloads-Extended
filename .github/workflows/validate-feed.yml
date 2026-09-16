@@ -6,12 +6,22 @@ on:
       - main
     paths:
       - support/**
+      - artifacts/**/cve-2026-43499-root
+      - artifacts/**/cve-2026-43499-root.sha256
+      - artifacts/**/SHA256SUMS
+      - Makefile
+      - src/su_daemon_quiet_runner.c
       - .github/scripts/**
       - .github/build-targets.json
       - .github/workflows/validate-feed.yml
   pull_request:
     paths:
       - support/**
+      - artifacts/**/cve-2026-43499-root
+      - artifacts/**/cve-2026-43499-root.sha256
+      - artifacts/**/SHA256SUMS
+      - Makefile
+      - src/su_daemon_quiet_runner.c
       - .github/scripts/**
       - .github/build-targets.json
       - .github/workflows/validate-feed.yml
