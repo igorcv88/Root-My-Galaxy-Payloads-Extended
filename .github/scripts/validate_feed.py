@@ -79,7 +79,8 @@ EXPECTED_POLICIES = {
     "galaxy-s25-series-2026-06-07": ("default", False),
 }
 
-STABLE_ROOT_HELPER_SHA256 = "788611baf566f0ca9008d28fa7d1b1edb4657efc56e4b5ac24b319ae12519dd4"
+QUIET_ROOT_HELPER_SHA256 = "4dd29619caae2b08aa491d7fcfc2e5d0d1ea11d0b6b9d1673d49f7580a40858f"
+QUIET_ROOT_HELPER_SIZE = 32888
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -173,7 +174,7 @@ def validate_v3() -> None:
         if helper_path:
             helper = target.get("rootHelper")
             validate_artifact(helper, f"{payload_id} root helper", helper_path)
-            if helper["sha256"].lower() != STABLE_ROOT_HELPER_SHA256 or helper["size"] != 31496:
+            if helper["sha256"].lower() != QUIET_ROOT_HELPER_SHA256 or helper["size"] != QUIET_ROOT_HELPER_SIZE:
                 raise AssertionError(f"root helper contract drifted for {payload_id}")
         elif "rootHelper" in target:
             raise AssertionError(f"manual generic profile must not add an exact root-helper contract: {payload_id}")
