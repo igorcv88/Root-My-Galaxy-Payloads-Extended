@@ -30,12 +30,14 @@ This repository maintains the firmware-specific files consumed by [Root My Galax
 | Device | Firmware | Android | Kernel | Status |
 | --- | --- | --- | --- | --- |
 | Galaxy S25 Ultra SM-S938B | `S938BXXSBCZG3` | 16 | 6.6.98 | Supported |
+| Galaxy S25 Edge SM-S937B | `S937BXXU8CZF1` | 16 | 6.6.98 | Verified exact-match support |
 | Galaxy S25 Ultra SM-S938B | `S938BXXUCZZI4` | 17 / One UI 9 beta | 6.6.127 | Hardware validated |
-| Galaxy S25 SM-S931B | `S931BXXUCZZI4` | 17 / One UI 9 beta | 6.6.127 | Exact-match profile available |\n| Galaxy S25+ SM-S936B | compatible 6.6.98 builds | 16 | 6.6.98 | Advanced support (unvalidated) |
+| Galaxy S25 SM-S931B | `S931BXXUCZZI4` | 17 / One UI 9 beta | 6.6.127 | Exact-match profile available |
+| Galaxy S25+ SM-S936B | compatible 6.6.98 builds | 16 | 6.6.98 | Advanced support (unvalidated) |
 
 The feed also retains a legacy generic Galaxy S25/S25+ kernel-6.6.98 entry. Current exact identities are published in [support/targets-v3.json](support/targets-v3.json).
 
-SM-S936B currently has **Advanced support (unvalidated)** through the generic S25/S25+ kernel-6.6.98 profile. Automatic selection still requires an exact profile. ZZI4 will receive its own exact match after the real device build, fingerprint, kernel and ABI/page-size identity are confirmed.
+The Galaxy S25 Edge `SM-S937B / S937BXXU8CZF1` profile is an exact match for codename `psq`, Android 16, kernel release `6.6.98-android15-8-pd6ff1cd-abogkiS937BXXU8CZF1-4k`, arm64-v8a and 4 KiB pages. SM-S936B currently has **Advanced support (unvalidated)** through the generic S25/S25+ kernel-6.6.98 profile. Automatic selection still requires an exact profile.
 
 ## Feed and artifact verification
 
